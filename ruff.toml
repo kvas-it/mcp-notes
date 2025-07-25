@@ -1,0 +1,15 @@
+[tool.ruff]
+line-length = 88
+fix = true
+exclude = [
+    "__pycache__",
+    ".pytest_cache",
+    "venv",
+    ".venv",
+    "build",
+    "dist",
+]
+
+[tool.ruff.format]
+quote-style = "single"
+docstring-code-format = true

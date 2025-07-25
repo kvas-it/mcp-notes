@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcp-notes"
+version = "0.1.0"
+description = "MCP server for managing notes"
+authors = [{name = "User"}]
+dependencies = [
+    "fastmcp",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+    "flake8",
+]
+
+[project.scripts]
+mcp-notes = "mcp_notes.__main__:main"
