@@ -193,3 +193,108 @@ async def test_delete_note_no_parameters(mcp_server):
         with pytest.raises(Exception) as exc_info:
             await client.call_tool('delete_note', {})
         assert 'Must provide either title or filename' in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_update_note_by_title_success(mcp_server):
+    """Test updating a note by title."""
+    async with Client(mcp_server) as client:
+        # Add a note
+        await client.call_tool(
+            'add_note',
+            {
+                'title': 'Update Test',
+                'content': 'Original content',
+                'tags': ['original'],
+            },
+        )
+
+        # Update it
+        result = await client.call_tool(
+            'update_note',
+            {
+                'title': 'Update Test',
+                'content': 'Updated content',
+                'tags': ['updated', 'test'],
+            },
+        )
+
+        assert 'updated' in result.data
+        assert 'Update Test' in result.data
+
+        # Verify the update
+        get_result = await client.call_tool('get_note', {'title': 'Update Test'})
+        assert 'Updated content' in get_result.data
+        assert 'updated, test' in get_result.data
+
+
+@pytest.mark.asyncio
+async def test_update_note_by_filename_success(mcp_server):
+    """Test updating a note by filename."""
+    async with Client(mcp_server) as client:
+        # Add a note
+        await client.call_tool(
+            'add_note',
+            {'title': 'File Update', 'content': 'Original', 'tags': ['file']},
+        )
+
+        # Update by filename
+        result = await client.call_tool(
+            'update_note',
+            {
+                'filename': 'file_update.md',
+                'content': 'Updated via filename',
+                'tags': ['updated'],
+            },
+        )
+
+        assert 'updated' in result.data
+
+        # Verify the update
+        get_result = await client.call_tool('get_note', {'filename': 'file_update.md'})
+        assert 'Updated via filename' in get_result.data
+
+
+@pytest.mark.asyncio
+async def test_update_note_without_tags(mcp_server):
+    """Test updating a note without providing tags."""
+    async with Client(mcp_server) as client:
+        # Add a note
+        await client.call_tool(
+            'add_note',
+            {'title': 'No Tags Update', 'content': 'Original', 'tags': ['original']},
+        )
+
+        # Update without tags parameter
+        result = await client.call_tool(
+            'update_note',
+            {'title': 'No Tags Update', 'content': 'Updated without tags'},
+        )
+
+        assert 'updated' in result.data
+
+        # Verify the update (should have empty tags)
+        get_result = await client.call_tool('get_note', {'title': 'No Tags Update'})
+        assert 'Updated without tags' in get_result.data
+        assert 'Tags: \n\n' in get_result.data
+
+
+@pytest.mark.asyncio
+async def test_update_note_not_found(mcp_server):
+    """Test updating a non-existent note."""
+    async with Client(mcp_server) as client:
+        with pytest.raises(Exception) as exc_info:
+            await client.call_tool(
+                'update_note',
+                {'title': 'Non-existent', 'content': 'Content', 'tags': []},
+            )
+        assert 'not found' in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_update_note_no_parameters(mcp_server):
+    """Test updating without providing title or filename."""
+    async with Client(mcp_server) as client:
+        with pytest.raises(Exception) as exc_info:
+            await client.call_tool('update_note', {'content': 'Content', 'tags': []})
+        assert 'Must provide either title or filename' in str(exc_info.value)

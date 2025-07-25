@@ -56,3 +56,28 @@ def delete_note(title: Optional[str] = None, filename: Optional[str] = None) -> 
 
     identifier = title or filename
     return f"Note '{identifier}' deleted"
+
+
+@app.tool
+def update_note(
+    content: str,
+    tags: List[str] = None,
+    title: Optional[str] = None,
+    filename: Optional[str] = None,
+) -> str:
+    """Update an existing note's content and tags by title or filename."""
+    if not title and not filename:
+        raise ValueError('Must provide either title or filename')
+
+    if tags is None:
+        tags = []
+
+    success = app.storage.update_note(
+        title=title, filename=filename, content=content, tags=tags
+    )
+    if not success:
+        identifier = title or filename
+        raise ValueError(f"Note '{identifier}' not found")
+
+    identifier = title or filename
+    return f"Note '{identifier}' updated"

@@ -130,3 +130,49 @@ class Storage:
         self._save_index(index)
 
         return True
+
+    def update_note(
+        self,
+        *,
+        title: Optional[str] = None,
+        filename: Optional[str] = None,
+        content: str,
+        tags: List[str],
+    ) -> bool:
+        """Update an existing note's content and tags by title or filename."""
+        index = self._load_index()
+
+        if title:
+            if title not in index:
+                return False
+            filename = index[title]['filename']
+        elif filename:
+            # Find title by filename
+            title = None
+            for t, data in index.items():
+                if data['filename'] == filename:
+                    title = t
+                    break
+
+            if not title:
+                return False
+        else:
+            return False
+
+        note_path = self.directory / filename
+        if not note_path.exists():
+            return False
+
+        # Format updated note content (preserve original title)
+        tags_str = ', '.join(tags) if tags else ''
+        note_content = f'# {title}\nTags: {tags_str}\n\n{content}'
+
+        # Write updated note file
+        with open(note_path, 'w') as f:
+            f.write(note_content)
+
+        # Update index with new tags
+        index[title]['tags'] = tags
+        self._save_index(index)
+
+        return True

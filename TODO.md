@@ -6,11 +6,6 @@ written in Python using FastMCP.
 
 ## Tasks
 
-- Set up CI using GitHub Actions
-  - Run tests on master and on pull requests
-  - Use the `venv` directory for the virtual environment
-  - Run `ruff check` and `ruff format --check` on the codebase
-  - Run tests using `pytest`
 - Search in notes?
   - Can maybe request filtered index by tag?
   - What about full text search?
