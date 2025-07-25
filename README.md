@@ -6,6 +6,7 @@ MCP Notes is an MCP (Model Context Protocol) server for managing notes. It store
 
 - **Add Notes**: Create new notes with titles, content, and tags
 - **Retrieve Notes**: Get notes by title or filename
+- **Update Notes**: Modify existing note content and tags
 - **List Notes**: View all notes with their metadata
 - **Delete Notes**: Remove notes by title or filename
 - **Tag Support**: Organize notes with customizable tags
@@ -72,6 +73,26 @@ Note: Either `title` or `filename` must be provided.
 List all notes with their metadata.
 
 **Returns:** List of note information including filename, title, and tags.
+
+#### `update_note`
+Update an existing note's content and tags.
+
+**Parameters:**
+- `content` (str): The new note content
+- `tags` (List[str], optional): New list of tags for the note
+- `title` (str, optional): The note title to update
+- `filename` (str, optional): The note filename to update
+
+Note: Either `title` or `filename` must be provided. The note's title will be preserved.
+
+**Example:**
+```python
+update_note(
+    title="Meeting Notes",
+    content="Updated content with action items",
+    tags=["work", "meetings", "action-items"]
+)
+```
 
 #### `delete_note`
 Delete a note by title or filename.
