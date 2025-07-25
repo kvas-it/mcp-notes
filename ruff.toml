@@ -1,4 +1,3 @@
-[tool.ruff]
 line-length = 88
 fix = true
 exclude = [
@@ -10,6 +9,6 @@ exclude = [
     "dist",
 ]
 
-[tool.ruff.format]
+[format]
 quote-style = "single"
 docstring-code-format = true
