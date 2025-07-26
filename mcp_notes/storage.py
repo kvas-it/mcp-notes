@@ -65,19 +65,8 @@ class Storage:
 
         return note_path
 
-    def get_note(
-        self, *, title: Optional[str] = None, filename: Optional[str] = None
-    ) -> Optional[str]:
-        """Retrieve a note by title or filename."""
-        if title:
-            index = self._load_index()
-            if title not in index:
-                return None
-            filename = index[title]['filename']
-
-        if not filename:
-            return None
-
+    def get_note(self, *, filename: str) -> Optional[str]:
+        """Retrieve a note by filename."""
         note_path = self.directory / filename
         if not note_path.exists():
             return None
@@ -93,74 +82,43 @@ class Storage:
             for title, data in index.items()
         ]
 
-    def delete_note(
-        self, *, title: Optional[str] = None, filename: Optional[str] = None
-    ) -> bool:
-        """Delete a note by title or filename."""
-        index = self._load_index()
-
-        if title:
-            if title not in index:
-                return False
-            filename = index[title]['filename']
-            # Remove from index
-            del index[title]
-        elif filename:
-            # Find title by filename
-            title_to_delete = None
-            for t, data in index.items():
-                if data['filename'] == filename:
-                    title_to_delete = t
-                    break
-
-            if not title_to_delete:
-                return False
-
-            # Remove from index
-            del index[title_to_delete]
-        else:
-            return False
-
-        # Delete file
-        note_path = self.directory / filename
-        if note_path.exists():
-            note_path.unlink()
-
-        # Save updated index
-        self._save_index(index)
-
-        return True
-
-    def update_note(
-        self,
-        *,
-        title: Optional[str] = None,
-        filename: Optional[str] = None,
-        content: str,
-        tags: List[str],
-    ) -> bool:
-        """Update an existing note's content and tags by title or filename."""
-        index = self._load_index()
-
-        if title:
-            if title not in index:
-                return False
-            filename = index[title]['filename']
-        elif filename:
-            # Find title by filename
-            title = None
-            for t, data in index.items():
-                if data['filename'] == filename:
-                    title = t
-                    break
-
-            if not title:
-                return False
-        else:
-            return False
-
+    def delete_note(self, *, filename: str) -> bool:
+        """Delete a note by filename."""
         note_path = self.directory / filename
         if not note_path.exists():
+            return False
+
+        # Find title by filename and remove from index
+        index = self._load_index()
+        title_to_delete = None
+        for title, data in index.items():
+            if data['filename'] == filename:
+                title_to_delete = title
+                break
+
+        if title_to_delete:
+            del index[title_to_delete]
+            self._save_index(index)
+
+        # Delete file
+        note_path.unlink()
+        return True
+
+    def update_note(self, *, filename: str, content: str, tags: List[str]) -> bool:
+        """Update an existing note's content and tags by filename."""
+        note_path = self.directory / filename
+        if not note_path.exists():
+            return False
+
+        # Find title by filename
+        index = self._load_index()
+        title = None
+        for t, data in index.items():
+            if data['filename'] == filename:
+                title = t
+                break
+
+        if not title:
             return False
 
         # Format updated note content (preserve original title)

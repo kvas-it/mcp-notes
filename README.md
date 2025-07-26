@@ -5,10 +5,10 @@ MCP Notes is an MCP (Model Context Protocol) server for managing notes. It store
 ## Features
 
 - **Add Notes**: Create new notes with titles, content, and tags
-- **Retrieve Notes**: Get notes by title or filename
-- **Update Notes**: Modify existing note content and tags
+- **Retrieve Notes**: Get notes by filename
+- **Update Notes**: Modify existing note content and tags by filename
 - **List Notes**: View all notes with their metadata
-- **Delete Notes**: Remove notes by title or filename
+- **Delete Notes**: Remove notes by filename
 - **Tag Support**: Organize notes with customizable tags
 - **File-based Storage**: Notes are stored as markdown files in a specified directory
 - **JSON Index**: Fast lookups using a JSON index file
@@ -61,13 +61,10 @@ add_note(
 ```
 
 #### `get_note`
-Retrieve a note by title or filename.
+Retrieve a note by filename.
 
 **Parameters:**
-- `title` (str, optional): The note title
-- `filename` (str, optional): The note filename
-
-Note: Either `title` or `filename` must be provided.
+- `filename` (str): The note filename (e.g., "my_note.md")
 
 #### `list_notes`
 List all notes with their metadata.
@@ -78,30 +75,26 @@ List all notes with their metadata.
 Update an existing note's content and tags.
 
 **Parameters:**
+- `filename` (str): The note filename to update (e.g., "my_note.md")
 - `content` (str): The new note content
 - `tags` (List[str], optional): New list of tags for the note
-- `title` (str, optional): The note title to update
-- `filename` (str, optional): The note filename to update
 
-Note: Either `title` or `filename` must be provided. The note's title will be preserved.
+Note: The note's title will be preserved from the original note.
 
 **Example:**
 ```python
 update_note(
-    title="Meeting Notes",
+    filename="meeting_notes.md",
     content="Updated content with action items",
     tags=["work", "meetings", "action-items"]
 )
 ```
 
 #### `delete_note`
-Delete a note by title or filename.
+Delete a note by filename.
 
 **Parameters:**
-- `title` (str, optional): The note title
-- `filename` (str, optional): The note filename
-
-Note: Either `title` or `filename` must be provided.
+- `filename` (str): The note filename to delete (e.g., "my_note.md")
 
 ## File Structure
 

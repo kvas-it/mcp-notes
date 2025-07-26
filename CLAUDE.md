@@ -52,7 +52,20 @@ venv/bin/python -m ruff check --fix
 
 - `mcp_notes/` - Main application package
 - `mcp_notes/storage.py` - Storage class for managing note files
-- `mcp_notes/mcp_server.py` - FastMCP server setup
+- `mcp_notes/mcp_server.py` - FastMCP server setup and tools
 - `mcp_notes/__main__.py` - CLI entry point
+- `tests/` - Test files for storage and MCP server functionality
 - `pyproject.toml` - Project dependencies and metadata
 - `ruff.toml` - Linting and formatting configuration
+
+## API Changes
+
+### Filename-Only Operations
+
+As of the latest version, the following operations require only a filename parameter:
+
+- `get_note(filename)` - Retrieve a note by filename
+- `update_note(filename, content, tags=None)` - Update a note by filename
+- `delete_note(filename)` - Delete a note by filename
+
+The `add_note(title, content, tags=None)` operation still uses titles to generate filenames automatically. The `list_notes()` operation returns metadata for all notes including both filename and title.

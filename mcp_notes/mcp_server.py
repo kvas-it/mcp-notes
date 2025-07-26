@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List
 from pydantic import BaseModel
 from fastmcp import FastMCP
 
@@ -23,15 +23,11 @@ def add_note(title: str, content: str, tags: List[str] = None) -> str:
 
 
 @app.tool
-def get_note(title: Optional[str] = None, filename: Optional[str] = None) -> str:
-    """Retrieve a note by title or filename."""
-    if not title and not filename:
-        raise ValueError('Must provide either title or filename')
-
-    content = app.storage.get_note(title=title, filename=filename)
+def get_note(filename: str) -> str:
+    """Retrieve a note by filename."""
+    content = app.storage.get_note(filename=filename)
     if content is None:
-        identifier = title or filename
-        raise ValueError(f"Note '{identifier}' not found")
+        raise ValueError(f"Note '{filename}' not found")
 
     return content
 
@@ -44,40 +40,23 @@ def list_notes() -> List[NoteInfo]:
 
 
 @app.tool
-def delete_note(title: Optional[str] = None, filename: Optional[str] = None) -> str:
-    """Delete a note by title or filename."""
-    if not title and not filename:
-        raise ValueError('Must provide either title or filename')
-
-    success = app.storage.delete_note(title=title, filename=filename)
+def delete_note(filename: str) -> str:
+    """Delete a note by filename."""
+    success = app.storage.delete_note(filename=filename)
     if not success:
-        identifier = title or filename
-        raise ValueError(f"Note '{identifier}' not found")
+        raise ValueError(f"Note '{filename}' not found")
 
-    identifier = title or filename
-    return f"Note '{identifier}' deleted"
+    return f"Note '{filename}' deleted"
 
 
 @app.tool
-def update_note(
-    content: str,
-    tags: List[str] = None,
-    title: Optional[str] = None,
-    filename: Optional[str] = None,
-) -> str:
-    """Update an existing note's content and tags by title or filename."""
-    if not title and not filename:
-        raise ValueError('Must provide either title or filename')
-
+def update_note(filename: str, content: str, tags: List[str] = None) -> str:
+    """Update an existing note's content and tags by filename."""
     if tags is None:
         tags = []
 
-    success = app.storage.update_note(
-        title=title, filename=filename, content=content, tags=tags
-    )
+    success = app.storage.update_note(filename=filename, content=content, tags=tags)
     if not success:
-        identifier = title or filename
-        raise ValueError(f"Note '{identifier}' not found")
+        raise ValueError(f"Note '{filename}' not found")
 
-    identifier = title or filename
-    return f"Note '{identifier}' updated"
+    return f"Note '{filename}' updated"

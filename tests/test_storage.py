@@ -84,18 +84,6 @@ def test_add_note_updates_index(storage):
     assert index[title]['tags'] == tags
 
 
-def test_get_note_by_title(storage):
-    title = 'Test Note'
-    content = 'Test content'
-    tags = ['test']
-
-    storage.add_note(title, content, tags)
-    result = storage.get_note(title=title)
-
-    expected = '# Test Note\nTags: test\n\nTest content'
-    assert result == expected
-
-
 def test_get_note_by_filename(storage):
     title = 'Test Note'
     content = 'Test content'
@@ -109,9 +97,6 @@ def test_get_note_by_filename(storage):
 
 
 def test_get_note_not_found(storage):
-    result = storage.get_note(title='Non-existent')
-    assert result is None
-
     result = storage.get_note(filename='non_existent.md')
     assert result is None
 
@@ -141,24 +126,6 @@ def test_list_notes(storage):
     assert result[1]['tags'] == ['tag2', 'tag3']
 
 
-def test_delete_note_by_title(storage):
-    title = 'Test Note'
-    storage.add_note(title, 'Content', ['test'])
-
-    success = storage.delete_note(title=title)
-    assert success is True
-
-    # Check file is gone
-    note_path = storage.directory / 'test_note.md'
-    assert not note_path.exists()
-
-    # Check index is updated
-    index_path = storage.directory / 'notes_index.json'
-    with open(index_path) as f:
-        index = json.load(f)
-    assert title not in index
-
-
 def test_delete_note_by_filename(storage):
     title = 'Test Note'
     storage.add_note(title, 'Content', ['test'])
@@ -178,24 +145,21 @@ def test_delete_note_by_filename(storage):
 
 
 def test_delete_note_not_found(storage):
-    success = storage.delete_note(title='Non-existent')
-    assert success is False
-
     success = storage.delete_note(filename='non_existent.md')
     assert success is False
 
 
-def test_update_note_by_title(storage):
+def test_update_note_by_filename(storage):
     title = 'Test Note'
     storage.add_note(title, 'Original content', ['original'])
 
     success = storage.update_note(
-        title=title, content='Updated content', tags=['updated', 'tags']
+        filename='test_note.md', content='Updated content', tags=['updated', 'tags']
     )
     assert success is True
 
     # Check file content is updated
-    result = storage.get_note(title=title)
+    result = storage.get_note(filename='test_note.md')
     expected = '# Test Note\nTags: updated, tags\n\nUpdated content'
     assert result == expected
 
@@ -206,43 +170,22 @@ def test_update_note_by_title(storage):
     assert index[title]['tags'] == ['updated', 'tags']
 
 
-def test_update_note_by_filename(storage):
-    title = 'Test Note'
-    storage.add_note(title, 'Original content', ['original'])
-
-    success = storage.update_note(
-        filename='test_note.md', content='Updated content', tags=['updated']
-    )
-    assert success is True
-
-    # Check file content is updated
-    result = storage.get_note(filename='test_note.md')
-    expected = '# Test Note\nTags: updated\n\nUpdated content'
-    assert result == expected
-
-
 def test_update_note_empty_tags(storage):
     title = 'Test Note'
     storage.add_note(title, 'Original content', ['original'])
 
-    success = storage.update_note(title=title, content='Updated content', tags=[])
+    success = storage.update_note(
+        filename='test_note.md', content='Updated content', tags=[]
+    )
     assert success is True
 
-    result = storage.get_note(title=title)
+    result = storage.get_note(filename='test_note.md')
     expected = '# Test Note\nTags: \n\nUpdated content'
     assert result == expected
 
 
 def test_update_note_not_found(storage):
-    success = storage.update_note(title='Non-existent', content='Content', tags=[])
-    assert success is False
-
     success = storage.update_note(
         filename='non_existent.md', content='Content', tags=[]
     )
-    assert success is False
-
-
-def test_update_note_no_identifier(storage):
-    success = storage.update_note(content='Content', tags=[])
     assert success is False

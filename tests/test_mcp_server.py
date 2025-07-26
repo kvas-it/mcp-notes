@@ -50,8 +50,8 @@ async def test_add_note_without_tags(mcp_server):
 
 
 @pytest.mark.asyncio
-async def test_get_note_by_title_success(mcp_server):
-    """Test retrieving a note by title."""
+async def test_get_note_by_filename_success(mcp_server):
+    """Test retrieving a note by filename."""
     # First add a note
     async with Client(mcp_server) as client:
         await client.call_tool(
@@ -63,26 +63,11 @@ async def test_get_note_by_title_success(mcp_server):
             },
         )
 
-        # Now get it
-        result = await client.call_tool('get_note', {'title': 'Retrievable Note'})
+        # Now get it by filename
+        result = await client.call_tool('get_note', {'filename': 'retrievable_note.md'})
 
         assert '# Retrievable Note' in result.data
         assert 'Content to retrieve' in result.data
-
-
-@pytest.mark.asyncio
-async def test_get_note_by_filename_success(mcp_server):
-    """Test retrieving a note by filename."""
-    # First add a note
-    async with Client(mcp_server) as client:
-        await client.call_tool(
-            'add_note', {'title': 'File Note', 'content': 'File content', 'tags': []}
-        )
-
-        # Now get it by filename
-        result = await client.call_tool('get_note', {'filename': 'file_note.md'})
-
-        assert '# File Note' in result.data
 
 
 @pytest.mark.asyncio
@@ -90,17 +75,8 @@ async def test_get_note_not_found(mcp_server):
     """Test getting a non-existent note."""
     async with Client(mcp_server) as client:
         with pytest.raises(Exception) as exc_info:
-            await client.call_tool('get_note', {'title': 'Non-existent'})
+            await client.call_tool('get_note', {'filename': 'non_existent.md'})
         assert 'not found' in str(exc_info.value)
-
-
-@pytest.mark.asyncio
-async def test_get_note_no_parameters(mcp_server):
-    """Test getting a note without providing title or filename."""
-    async with Client(mcp_server) as client:
-        with pytest.raises(Exception) as exc_info:
-            await client.call_tool('get_note', {})
-        assert 'Must provide either title or filename' in str(exc_info.value)
 
 
 @pytest.mark.asyncio
@@ -140,8 +116,8 @@ async def test_list_notes_with_content(mcp_server):
 
 
 @pytest.mark.asyncio
-async def test_delete_note_by_title_success(mcp_server):
-    """Test deleting a note by title."""
+async def test_delete_note_by_filename_success(mcp_server):
+    """Test deleting a note by filename."""
     async with Client(mcp_server) as client:
         # Add a note
         await client.call_tool(
@@ -150,31 +126,14 @@ async def test_delete_note_by_title_success(mcp_server):
         )
 
         # Delete it
-        result = await client.call_tool('delete_note', {'title': 'Delete Me'})
+        result = await client.call_tool('delete_note', {'filename': 'delete_me.md'})
 
         assert 'deleted' in result.data
 
         # Verify it's gone
         with pytest.raises(Exception) as exc_info:
-            await client.call_tool('get_note', {'title': 'Delete Me'})
+            await client.call_tool('get_note', {'filename': 'delete_me.md'})
         assert 'not found' in str(exc_info.value)
-
-
-@pytest.mark.asyncio
-async def test_delete_note_by_filename_success(mcp_server):
-    """Test deleting a note by filename."""
-    async with Client(mcp_server) as client:
-        # Add a note
-        await client.call_tool(
-            'add_note', {'title': 'Delete by File', 'content': 'Content', 'tags': []}
-        )
-
-        # Delete by filename
-        result = await client.call_tool(
-            'delete_note', {'filename': 'delete_by_file.md'}
-        )
-
-        assert 'deleted' in result.data
 
 
 @pytest.mark.asyncio
@@ -182,22 +141,13 @@ async def test_delete_note_not_found(mcp_server):
     """Test deleting a non-existent note."""
     async with Client(mcp_server) as client:
         with pytest.raises(Exception) as exc_info:
-            await client.call_tool('delete_note', {'title': 'Non-existent'})
+            await client.call_tool('delete_note', {'filename': 'non_existent.md'})
         assert 'not found' in str(exc_info.value)
 
 
 @pytest.mark.asyncio
-async def test_delete_note_no_parameters(mcp_server):
-    """Test deleting without providing title or filename."""
-    async with Client(mcp_server) as client:
-        with pytest.raises(Exception) as exc_info:
-            await client.call_tool('delete_note', {})
-        assert 'Must provide either title or filename' in str(exc_info.value)
-
-
-@pytest.mark.asyncio
-async def test_update_note_by_title_success(mcp_server):
-    """Test updating a note by title."""
+async def test_update_note_by_filename_success(mcp_server):
+    """Test updating a note by filename."""
     async with Client(mcp_server) as client:
         # Add a note
         await client.call_tool(
@@ -213,46 +163,19 @@ async def test_update_note_by_title_success(mcp_server):
         result = await client.call_tool(
             'update_note',
             {
-                'title': 'Update Test',
+                'filename': 'update_test.md',
                 'content': 'Updated content',
                 'tags': ['updated', 'test'],
             },
         )
 
         assert 'updated' in result.data
-        assert 'Update Test' in result.data
+        assert 'update_test.md' in result.data
 
         # Verify the update
-        get_result = await client.call_tool('get_note', {'title': 'Update Test'})
+        get_result = await client.call_tool('get_note', {'filename': 'update_test.md'})
         assert 'Updated content' in get_result.data
         assert 'updated, test' in get_result.data
-
-
-@pytest.mark.asyncio
-async def test_update_note_by_filename_success(mcp_server):
-    """Test updating a note by filename."""
-    async with Client(mcp_server) as client:
-        # Add a note
-        await client.call_tool(
-            'add_note',
-            {'title': 'File Update', 'content': 'Original', 'tags': ['file']},
-        )
-
-        # Update by filename
-        result = await client.call_tool(
-            'update_note',
-            {
-                'filename': 'file_update.md',
-                'content': 'Updated via filename',
-                'tags': ['updated'],
-            },
-        )
-
-        assert 'updated' in result.data
-
-        # Verify the update
-        get_result = await client.call_tool('get_note', {'filename': 'file_update.md'})
-        assert 'Updated via filename' in get_result.data
 
 
 @pytest.mark.asyncio
@@ -268,13 +191,15 @@ async def test_update_note_without_tags(mcp_server):
         # Update without tags parameter
         result = await client.call_tool(
             'update_note',
-            {'title': 'No Tags Update', 'content': 'Updated without tags'},
+            {'filename': 'no_tags_update.md', 'content': 'Updated without tags'},
         )
 
         assert 'updated' in result.data
 
         # Verify the update (should have empty tags)
-        get_result = await client.call_tool('get_note', {'title': 'No Tags Update'})
+        get_result = await client.call_tool(
+            'get_note', {'filename': 'no_tags_update.md'}
+        )
         assert 'Updated without tags' in get_result.data
         assert 'Tags: \n\n' in get_result.data
 
@@ -286,15 +211,6 @@ async def test_update_note_not_found(mcp_server):
         with pytest.raises(Exception) as exc_info:
             await client.call_tool(
                 'update_note',
-                {'title': 'Non-existent', 'content': 'Content', 'tags': []},
+                {'filename': 'non_existent.md', 'content': 'Content', 'tags': []},
             )
         assert 'not found' in str(exc_info.value)
-
-
-@pytest.mark.asyncio
-async def test_update_note_no_parameters(mcp_server):
-    """Test updating without providing title or filename."""
-    async with Client(mcp_server) as client:
-        with pytest.raises(Exception) as exc_info:
-            await client.call_tool('update_note', {'content': 'Content', 'tags': []})
-        assert 'Must provide either title or filename' in str(exc_info.value)
