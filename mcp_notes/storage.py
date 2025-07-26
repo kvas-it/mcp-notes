@@ -33,6 +33,127 @@ class Storage:
             parent = parent[:-3]
         return parent
 
+    def _calculate_children_count(self, note_filename: str) -> int:
+        """Calculate the number of immediate child notes for a given note."""
+        # Remove .md extension to get directory name
+        if note_filename.endswith('.md'):
+            dir_name = note_filename[:-3]
+        else:
+            dir_name = note_filename
+
+        # Handle nested paths - get the full directory path
+        if '/' in dir_name:
+            child_dir = self.directory / dir_name
+        else:
+            child_dir = self.directory / dir_name
+
+        if not child_dir.exists():
+            return 0
+
+        # Load the child directory's index
+        child_index = self._load_index(child_dir)
+        return len(child_index)
+
+    def _calculate_descendant_count(self, note_filename: str) -> int:
+        """Calculate the total number of descendant notes recursively."""
+        # Remove .md extension to get directory name
+        if note_filename.endswith('.md'):
+            dir_name = note_filename[:-3]
+        else:
+            dir_name = note_filename
+
+        # Handle nested paths - get the full directory path
+        if '/' in dir_name:
+            child_dir = self.directory / dir_name
+        else:
+            child_dir = self.directory / dir_name
+
+        if not child_dir.exists():
+            return 0
+
+        total_count = 0
+        child_index = self._load_index(child_dir)
+
+        # Count immediate children
+        total_count += len(child_index)
+
+        # Recursively count descendants of each child
+        for title, data in child_index.items():
+            child_filename = data['filename']
+            # For nested children, we need to get just the filename part
+            if '/' in child_filename:
+                # Get the relative path from the child directory
+                relative_filename = (
+                    child_filename.split('/', 1)[1]
+                    if '/' in child_filename
+                    else child_filename
+                )
+                full_child_path = f'{dir_name}/{relative_filename}'
+            else:
+                full_child_path = f'{dir_name}/{child_filename}'
+            total_count += self._calculate_descendant_count(full_child_path)
+
+        return total_count
+
+    def _update_parent_counts(self, filename: str, count_delta: int) -> None:
+        """Update children-count and descendant-count for all parents in the hierarchy."""
+        if '/' not in filename:
+            # Top-level note, no parents to update
+            return
+
+        # Get parent path
+        parent_parts = filename.split('/')[:-1]
+
+        # Update counts for each level in the hierarchy
+        current_path = ''
+        for i, part in enumerate(parent_parts):
+            if i == 0:
+                current_path = part
+                parent_dir = self.directory
+            else:
+                current_path = f'{current_path}/{part}'
+                parent_dir = self.directory / '/'.join(parent_parts[:i])
+
+            # Load parent index
+            parent_index = self._load_index(
+                parent_dir if parent_dir != self.directory else None
+            )
+
+            # Find the parent note entry
+            parent_note_name = None
+            for title, data in parent_index.items():
+                expected_filename = (
+                    f'{part}.md' if i == 0 else f'{"/".join(parent_parts[: i + 1])}.md'
+                )
+                if (
+                    data['filename'] == expected_filename
+                    or data['filename'] == f'{part}.md'
+                ):
+                    parent_note_name = title
+                    break
+
+            if parent_note_name:
+                # Recalculate actual counts
+                parent_filename = parent_index[parent_note_name]['filename']
+                children_count = self._calculate_children_count(parent_filename)
+                descendant_count = self._calculate_descendant_count(parent_filename)
+
+                # Update counts in index (only if > 0)
+                if children_count > 0:
+                    parent_index[parent_note_name]['children-count'] = children_count
+                    parent_index[parent_note_name]['descendant-count'] = (
+                        descendant_count
+                    )
+                else:
+                    # Remove count keys if no children
+                    parent_index[parent_note_name].pop('children-count', None)
+                    parent_index[parent_note_name].pop('descendant-count', None)
+
+                # Save updated parent index
+                self._save_index(
+                    parent_index, parent_dir if parent_dir != self.directory else None
+                )
+
     def _load_index(
         self, subdirectory: Optional[Path] = None
     ) -> Dict[str, Dict[str, any]]:
@@ -47,7 +168,22 @@ class Storage:
     def _save_index(
         self, index: Dict[str, Dict[str, any]], subdirectory: Optional[Path] = None
     ) -> None:
-        """Save the notes index to JSON file."""
+        """Save the notes index to JSON file with updated counts."""
+        # Update counts for each entry before saving
+        for title, data in index.items():
+            filename = data['filename']
+            children_count = self._calculate_children_count(filename)
+            descendant_count = self._calculate_descendant_count(filename)
+
+            # Only add count keys if there are children
+            if children_count > 0:
+                data['children-count'] = children_count
+                data['descendant-count'] = descendant_count
+            else:
+                # Remove count keys if no children
+                data.pop('children-count', None)
+                data.pop('descendant-count', None)
+
         index_path = self._get_index_path(subdirectory)
         # Ensure the directory exists
         index_path.parent.mkdir(parents=True, exist_ok=True)
@@ -128,6 +264,10 @@ class Storage:
         index[title] = {'filename': full_filename, 'tags': tags}
         self._save_index(index, target_dir if parent else None)
 
+        # Update parent counts if this is a child note
+        if parent:
+            self._update_parent_counts(full_filename, 1)
+
         return note_path
 
     def get_note(self, *, filename: str) -> Optional[str]:
@@ -153,10 +293,20 @@ class Storage:
             # List top-level notes
             index = self._load_index()
 
-        return [
-            {'filename': data['filename'], 'title': title, 'tags': data['tags']}
-            for title, data in index.items()
-        ]
+        result = []
+        for title, data in index.items():
+            note_info = {
+                'filename': data['filename'],
+                'title': title,
+                'tags': data['tags'],
+            }
+            # Add count information if present
+            if 'children-count' in data:
+                note_info['children_count'] = data['children-count']
+            if 'descendant-count' in data:
+                note_info['descendant_count'] = data['descendant-count']
+            result.append(note_info)
+        return result
 
     def delete_note(self, *, filename: str) -> bool:
         """Delete a note by filename."""
@@ -182,6 +332,10 @@ class Storage:
 
         # Delete file
         note_path.unlink()
+
+        # Update parent counts if this was a child note
+        if target_dir and note_dir != self.directory:
+            self._update_parent_counts(filename, -1)
 
         # Clean up empty directory if this was the last note in a subdirectory
         if target_dir and note_dir != self.directory:

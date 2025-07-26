@@ -390,3 +390,170 @@ def test_unique_filenames_in_subdirectories(storage):
     parent_dir = storage.directory / 'parent_note'
     assert (parent_dir / 'duplicate.md').exists()
     assert (parent_dir / 'duplicate_1.md').exists()
+
+
+# Tests for count functionality
+def test_children_count_basic(storage):
+    # Create parent note
+    storage.add_note('Parent Note', 'Parent content', ['parent'])
+
+    # Initially should have no count keys (no children)
+    notes = storage.list_notes()
+    parent_note = next(note for note in notes if note['title'] == 'Parent Note')
+    assert 'children_count' not in parent_note
+    assert 'descendant_count' not in parent_note
+
+    # Add child note
+    storage.add_note('Child Note', 'Child content', ['child'], parent='parent_note')
+
+    # Now should have count information
+    notes = storage.list_notes()
+    parent_note = next(note for note in notes if note['title'] == 'Parent Note')
+    assert parent_note['children_count'] == 1
+    assert parent_note['descendant_count'] == 1
+
+
+def test_children_count_multiple_children(storage):
+    # Create parent note
+    storage.add_note('Project', 'Project description', ['project'])
+
+    # Add multiple children
+    storage.add_note('Task 1', 'First task', ['task'], parent='project')
+    storage.add_note('Task 2', 'Second task', ['task'], parent='project')
+    storage.add_note('Meeting Notes', 'Meeting content', ['meeting'], parent='project')
+
+    # Check counts
+    notes = storage.list_notes()
+    parent_note = next(note for note in notes if note['title'] == 'Project')
+    assert parent_note['children_count'] == 3
+    assert parent_note['descendant_count'] == 3
+
+
+def test_descendant_count_nested_hierarchy(storage):
+    # Create three levels: grandparent -> parent -> child
+    storage.add_note('Grandparent', 'GP content', ['gp'])
+    storage.add_note('Parent', 'P content', ['p'], parent='grandparent')
+    storage.add_note('Child', 'C content', ['c'], parent='grandparent/parent')
+
+    # Check grandparent counts (should include all descendants)
+    notes = storage.list_notes()
+    grandparent_note = next(note for note in notes if note['title'] == 'Grandparent')
+    assert grandparent_note['children_count'] == 1  # Only immediate children
+    assert grandparent_note['descendant_count'] == 2  # All descendants
+
+    # Check parent counts
+    parent_notes = storage.list_notes(parent='grandparent')
+    parent_note = next(note for note in parent_notes if note['title'] == 'Parent')
+    assert parent_note['children_count'] == 1
+    assert parent_note['descendant_count'] == 1
+
+
+def test_count_updates_on_deletion(storage):
+    # Create parent with children
+    storage.add_note('Project', 'Project content', ['project'])
+    storage.add_note('Task 1', 'Task 1 content', ['task'], parent='project')
+    storage.add_note('Task 2', 'Task 2 content', ['task'], parent='project')
+
+    # Verify initial counts
+    notes = storage.list_notes()
+    parent_note = next(note for note in notes if note['title'] == 'Project')
+    assert parent_note['children_count'] == 2
+    assert parent_note['descendant_count'] == 2
+
+    # Delete one child
+    storage.delete_note(filename='project/task_1.md')
+
+    # Verify updated counts
+    notes = storage.list_notes()
+    parent_note = next(note for note in notes if note['title'] == 'Project')
+    assert parent_note['children_count'] == 1
+    assert parent_note['descendant_count'] == 1
+
+    # Delete last child
+    storage.delete_note(filename='project/task_2.md')
+
+    # Verify counts are removed (no children)
+    notes = storage.list_notes()
+    parent_note = next(note for note in notes if note['title'] == 'Project')
+    assert 'children_count' not in parent_note
+    assert 'descendant_count' not in parent_note
+
+
+def test_count_complex_hierarchy(storage):
+    # Create a complex hierarchy
+    # Root -> Branch1 -> Leaf1
+    #      -> Branch2 -> Leaf2
+    #                 -> Leaf3
+    storage.add_note('Root', 'Root content', ['root'])
+    storage.add_note('Branch 1', 'Branch 1 content', ['branch'], parent='root')
+    storage.add_note('Branch 2', 'Branch 2 content', ['branch'], parent='root')
+    storage.add_note('Leaf 1', 'Leaf 1 content', ['leaf'], parent='root/branch_1')
+    storage.add_note('Leaf 2', 'Leaf 2 content', ['leaf'], parent='root/branch_2')
+    storage.add_note('Leaf 3', 'Leaf 3 content', ['leaf'], parent='root/branch_2')
+
+    # Check root counts
+    notes = storage.list_notes()
+    root_note = next(note for note in notes if note['title'] == 'Root')
+    assert root_note['children_count'] == 2  # Branch 1, Branch 2
+    assert (
+        root_note['descendant_count'] == 5
+    )  # Branch 1, Branch 2, Leaf 1, Leaf 2, Leaf 3
+
+    # Check branch 1 counts
+    branch_notes = storage.list_notes(parent='root')
+    branch1_note = next(note for note in branch_notes if note['title'] == 'Branch 1')
+    assert branch1_note['children_count'] == 1  # Leaf 1
+    assert branch1_note['descendant_count'] == 1  # Leaf 1
+
+    # Check branch 2 counts
+    branch2_note = next(note for note in branch_notes if note['title'] == 'Branch 2')
+    assert branch2_note['children_count'] == 2  # Leaf 2, Leaf 3
+    assert branch2_note['descendant_count'] == 2  # Leaf 2, Leaf 3
+
+
+def test_count_persistence_in_index_files(storage):
+    # Create hierarchy
+    storage.add_note('Project', 'Project content', ['project'])
+    storage.add_note('Task', 'Task content', ['task'], parent='project')
+
+    # Check that counts are persisted in the index file
+    main_index_path = storage.directory / 'notes_index.json'
+    with open(main_index_path) as f:
+        main_index = json.load(f)
+
+    project_data = main_index['Project']
+    assert project_data['children-count'] == 1
+    assert project_data['descendant-count'] == 1
+
+    # Child notes should not have count keys (no children)
+    child_index_path = storage.directory / 'project' / 'notes_index.json'
+    with open(child_index_path) as f:
+        child_index = json.load(f)
+
+    task_data = child_index['Task']
+    assert 'children-count' not in task_data
+    assert 'descendant-count' not in task_data
+
+
+def test_count_with_existing_notes_migration(storage):
+    # Test that adding new notes to existing hierarchy updates all counts correctly
+    # Create parent note normally
+    storage.add_note('Existing Parent', 'Existing content', ['old'])
+
+    # Verify no counts initially
+    notes = storage.list_notes()
+    parent_note = next(note for note in notes if note['title'] == 'Existing Parent')
+    assert 'children_count' not in parent_note
+
+    # Now add a child note - this should trigger count updates
+    storage.add_note(
+        'Existing Child', 'Child content', ['old'], parent='existing_parent'
+    )
+
+    # Now should have count information
+    notes = storage.list_notes()
+    parent_note = next(note for note in notes if note['title'] == 'Existing Parent')
+
+    # Should now have count information
+    assert parent_note['children_count'] == 1
+    assert parent_note['descendant_count'] == 1

@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel
 from fastmcp import FastMCP
 
@@ -7,6 +7,8 @@ class NoteInfo(BaseModel):
     filename: str
     title: str
     tags: List[str]
+    children_count: Optional[int] = None
+    descendant_count: Optional[int] = None
 
 
 app = FastMCP(name='Notes')
@@ -80,8 +82,9 @@ def list_notes(parent: str = None) -> List[NoteInfo]:
                Examples: "project_alpha", "project_alpha/research"
 
     Returns:
-        List of NoteInfo objects containing filename, title, and tags for notes at the specified level.
+        List of NoteInfo objects containing filename, title, tags, and optional count information for notes at the specified level.
         Does NOT include notes from subdirectories - only direct children.
+        Notes with children include children_count (immediate children) and descendant_count (all nested children).
 
     Examples:
         - list_notes() - returns ["project_alpha.md", "personal.md"] (top-level only)

@@ -13,6 +13,7 @@ MCP Notes is an MCP (Model Context Protocol) server for managing notes. It store
 - **Tag Support**: Organize notes with customizable tags
 - **File-based Storage**: Notes are stored as markdown files in a hierarchical directory structure
 - **JSON Index**: Fast lookups using separate JSON index files for each directory level
+- **Automatic Counting**: Tracks children-count and descendant-count for notes with sub-notes
 
 ## Installation
 
@@ -92,7 +93,7 @@ List notes at a specific level of the hierarchy.
 **Parameters:**
 - `parent` (str, optional): Parent directory name to list child notes. If not provided, lists top-level notes only.
 
-**Returns:** List of note information including filename, title, and tags.
+**Returns:** List of note information including filename, title, tags, and optional count information for notes with children.
 
 **Examples:**
 ```python
@@ -173,6 +174,25 @@ Note content goes here...
 ### Index Files
 
 Each directory maintains its own `notes_index.json` file for fast lookups within that level of the hierarchy. The index contains metadata for notes in that specific directory only, not for notes in subdirectories.
+
+#### Count Information
+
+For notes that have child notes, the index automatically includes count information:
+
+```json
+{
+  "Project Alpha": {
+    "filename": "project_alpha.md",
+    "tags": ["work", "project"],
+    "children-count": 3,
+    "descendant-count": 8
+  }
+}
+```
+
+- **children-count**: Number of immediate child notes (direct children only)
+- **descendant-count**: Total number of all nested notes recursively
+- Notes without children do not have these keys to keep the index clean
 
 ## Development
 

@@ -379,3 +379,62 @@ async def test_hierarchical_update_note(mcp_server):
         )
         assert 'Updated child content' in get_result.data
         assert 'updated, child' in get_result.data
+
+
+@pytest.mark.asyncio
+async def test_count_information_via_mcp(mcp_server):
+    """Test that count information is exposed through MCP server."""
+    async with Client(mcp_server) as client:
+        # Add parent note
+        await client.call_tool(
+            'add_note',
+            {
+                'title': 'Parent Project',
+                'content': 'Parent content',
+                'tags': ['project'],
+            },
+        )
+
+        # Initially no count information (no children)
+        result = await client.call_tool('list_notes', {})
+        parent_note = next(
+            note for note in result.data if note['title'] == 'Parent Project'
+        )
+        assert parent_note['children_count'] is None
+        assert parent_note['descendant_count'] is None
+
+        # Add child notes
+        await client.call_tool(
+            'add_note',
+            {
+                'title': 'Task 1',
+                'content': 'First task',
+                'tags': ['task'],
+                'parent': 'parent_project',
+            },
+        )
+        await client.call_tool(
+            'add_note',
+            {
+                'title': 'Task 2',
+                'content': 'Second task',
+                'tags': ['task'],
+                'parent': 'parent_project',
+            },
+        )
+
+        # Now should have count information
+        result = await client.call_tool('list_notes', {})
+        parent_note = next(
+            note for note in result.data if note['title'] == 'Parent Project'
+        )
+        assert parent_note['children_count'] == 2
+        assert parent_note['descendant_count'] == 2
+
+        # Child notes should not have count information
+        child_result = await client.call_tool(
+            'list_notes', {'parent': 'parent_project'}
+        )
+        for child_note in child_result.data:
+            assert child_note['children_count'] is None
+            assert child_note['descendant_count'] is None
