@@ -60,12 +60,41 @@ venv/bin/python -m ruff check --fix
 
 ## API Changes
 
-### Filename-Only Operations
+### Hierarchical Notes Support
 
-As of the latest version, the following operations require only a filename parameter:
+As of the latest version, MCP Notes supports hierarchical organization of notes:
 
-- `get_note(filename)` - Retrieve a note by filename
-- `update_note(filename, content, tags=None)` - Update a note by filename
-- `delete_note(filename)` - Delete a note by filename
+#### Core Operations
 
-The `add_note(title, content, tags=None)` operation still uses titles to generate filenames automatically. The `list_notes()` operation returns metadata for all notes including both filename and title.
+- `add_note(title, content, tags=None, parent=None)` - Create notes with optional parent for hierarchy
+- `get_note(filename)` - Retrieve notes by filename, including nested paths like "parent/child.md"
+- `update_note(filename, content, tags=None)` - Update notes by filename, supports nested paths
+- `delete_note(filename)` - Delete notes by filename, supports nested paths with automatic cleanup
+- `list_notes(parent=None)` - List notes at specific hierarchy level
+
+#### Hierarchical Structure
+
+- Child notes are stored in subdirectories: `parent_name/child_name.md`
+- Each directory has its own `notes_index.json` for that level only
+- Support for unlimited nesting levels (parent/child/grandchild/...)
+- Parent parameter accepts filenames with or without `.md` extension
+- Empty directories are automatically cleaned up when last child note is deleted
+
+#### Usage Examples
+
+```python
+# Create top-level note
+add_note("Project Alpha", "Main project", ["project"])
+
+# Create child note
+add_note("Meeting Notes", "Weekly meetings", ["meetings"], parent="project_alpha")
+
+# Access nested note
+get_note("project_alpha/meeting_notes.md")
+
+# List child notes only
+list_notes(parent="project_alpha")
+
+# Deep nesting
+add_note("Action Items", "Tasks from meeting", ["tasks"], parent="project_alpha/meeting_notes")
+```

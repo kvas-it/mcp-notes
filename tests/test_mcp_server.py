@@ -214,3 +214,168 @@ async def test_update_note_not_found(mcp_server):
                 {'filename': 'non_existent.md', 'content': 'Content', 'tags': []},
             )
         assert 'not found' in str(exc_info.value)
+
+
+# Tests for hierarchical notes via MCP server
+@pytest.mark.asyncio
+async def test_add_note_with_parent(mcp_server):
+    """Test adding a note with a parent via MCP server."""
+    async with Client(mcp_server) as client:
+        # Add parent note
+        await client.call_tool(
+            'add_note',
+            {'title': 'Parent Note', 'content': 'Parent content', 'tags': ['parent']},
+        )
+
+        # Add child note
+        result = await client.call_tool(
+            'add_note',
+            {
+                'title': 'Child Note',
+                'content': 'Child content',
+                'tags': ['child'],
+                'parent': 'parent_note',
+            },
+        )
+
+        assert 'Child Note' in result.data
+        assert 'child_note.md' in result.data
+
+
+@pytest.mark.asyncio
+async def test_hierarchical_get_note(mcp_server):
+    """Test getting hierarchical notes via MCP server."""
+    async with Client(mcp_server) as client:
+        # Add parent and child notes
+        await client.call_tool(
+            'add_note',
+            {'title': 'Parent Note', 'content': 'Parent content', 'tags': ['parent']},
+        )
+        await client.call_tool(
+            'add_note',
+            {
+                'title': 'Child Note',
+                'content': 'Child content',
+                'tags': ['child'],
+                'parent': 'parent_note',
+            },
+        )
+
+        # Get child note using full path
+        result = await client.call_tool(
+            'get_note', {'filename': 'parent_note/child_note.md'}
+        )
+
+        assert '# Child Note' in result.data
+        assert 'Child content' in result.data
+
+
+@pytest.mark.asyncio
+async def test_list_notes_hierarchical(mcp_server):
+    """Test listing notes with hierarchy via MCP server."""
+    async with Client(mcp_server) as client:
+        # Add parent and child notes
+        await client.call_tool(
+            'add_note',
+            {'title': 'Parent Note', 'content': 'Parent content', 'tags': ['parent']},
+        )
+        await client.call_tool(
+            'add_note',
+            {
+                'title': 'Child Note 1',
+                'content': 'Child content 1',
+                'tags': ['child1'],
+                'parent': 'parent_note',
+            },
+        )
+        await client.call_tool(
+            'add_note',
+            {
+                'title': 'Child Note 2',
+                'content': 'Child content 2',
+                'tags': ['child2'],
+                'parent': 'parent_note',
+            },
+        )
+
+        # List top-level notes (should only show parent)
+        top_result = await client.call_tool('list_notes', {})
+        assert len(top_result.data) == 1
+        assert top_result.data[0]['title'] == 'Parent Note'
+
+        # List notes in parent directory (should show children)
+        child_result = await client.call_tool('list_notes', {'parent': 'parent_note'})
+        assert len(child_result.data) == 2
+        child_titles = {note['title'] for note in child_result.data}
+        assert child_titles == {'Child Note 1', 'Child Note 2'}
+
+
+@pytest.mark.asyncio
+async def test_hierarchical_delete_note(mcp_server):
+    """Test deleting hierarchical notes via MCP server."""
+    async with Client(mcp_server) as client:
+        # Add parent and child notes
+        await client.call_tool(
+            'add_note',
+            {'title': 'Parent Note', 'content': 'Parent content', 'tags': ['parent']},
+        )
+        await client.call_tool(
+            'add_note',
+            {
+                'title': 'Child Note',
+                'content': 'Child content',
+                'tags': ['child'],
+                'parent': 'parent_note',
+            },
+        )
+
+        # Delete child note
+        result = await client.call_tool(
+            'delete_note', {'filename': 'parent_note/child_note.md'}
+        )
+        assert 'deleted' in result.data
+
+        # Verify child note is gone
+        with pytest.raises(Exception) as exc_info:
+            await client.call_tool(
+                'get_note', {'filename': 'parent_note/child_note.md'}
+            )
+        assert 'not found' in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_hierarchical_update_note(mcp_server):
+    """Test updating hierarchical notes via MCP server."""
+    async with Client(mcp_server) as client:
+        # Add parent and child notes
+        await client.call_tool(
+            'add_note',
+            {'title': 'Parent Note', 'content': 'Parent content', 'tags': ['parent']},
+        )
+        await client.call_tool(
+            'add_note',
+            {
+                'title': 'Child Note',
+                'content': 'Original child content',
+                'tags': ['child'],
+                'parent': 'parent_note',
+            },
+        )
+
+        # Update child note
+        result = await client.call_tool(
+            'update_note',
+            {
+                'filename': 'parent_note/child_note.md',
+                'content': 'Updated child content',
+                'tags': ['updated', 'child'],
+            },
+        )
+        assert 'updated' in result.data
+
+        # Verify the update
+        get_result = await client.call_tool(
+            'get_note', {'filename': 'parent_note/child_note.md'}
+        )
+        assert 'Updated child content' in get_result.data
+        assert 'updated, child' in get_result.data
