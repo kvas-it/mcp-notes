@@ -10,7 +10,8 @@ MCP Notes is an MCP (Model Context Protocol) server for managing notes. It store
 - **Update Notes**: Modify existing note content and tags by filename
 - **List Notes**: View notes at any level of the hierarchy
 - **Delete Notes**: Remove notes by filename with automatic cleanup of empty directories
-- **Tag Support**: Organize notes with customizable tags
+- **Move Notes**: Relocate notes between directories with automatic reference updates
+- **Tag Management**: Add and remove tags from existing notes
 - **File-based Storage**: Notes are stored as markdown files in a hierarchical directory structure
 - **JSON Index**: Fast lookups using separate JSON index files for each directory level
 - **Automatic Counting**: Tracks children-count and descendant-count for notes with sub-notes
@@ -46,96 +47,58 @@ The server will create the directory if it doesn't exist and start listening for
 The server exposes the following MCP tools:
 
 #### `add_note`
-Add a new note with title, content, and optional tags. Can be created as a child of an existing note.
-
-**Parameters:**
-- `title` (str): The note title
-- `content` (str): The note content
-- `tags` (List[str], optional): List of tags for the note
-- `parent` (str, optional): Parent note filename (with or without .md extension) to create a sub-note
-
-**Examples:**
-```python
-# Create a top-level note
-add_note(
-    title="Project Alpha",
-    content="Main project documentation",
-    tags=["project", "work"]
-)
-
-# Create a child note under "Project Alpha"
-add_note(
-    title="Meeting Notes",
-    content="Weekly standup discussions",
-    tags=["meetings"],
-    parent="project_alpha"  # or "project_alpha.md"
-)
-```
+Create a new note with title, content, and optional tags. Can be nested under a parent note.
+- `title` (str): Note title  
+- `content` (str): Note content
+- `tags` (List[str], optional): Tags for the note
+- `parent` (str, optional): Parent note filename for hierarchical organization
 
 #### `get_note`
-Retrieve a note by filename, including notes in subdirectories.
-
-**Parameters:**
-- `filename` (str): The note filename (e.g., "my_note.md" for top-level or "parent_name/child_note.md" for nested notes)
-
-**Examples:**
-```python
-# Get a top-level note
-get_note(filename="project_alpha.md")
-
-# Get a nested note
-get_note(filename="project_alpha/meeting_notes.md")
-```
+Retrieve a note by filename, supporting nested paths.
+- `filename` (str): Note filename (e.g., "note.md" or "parent/child.md")
 
 #### `list_notes`
-List notes at a specific level of the hierarchy.
-
-**Parameters:**
-- `parent` (str, optional): Parent directory name to list child notes. If not provided, lists top-level notes only.
-
-**Returns:** List of note information including filename, title, tags, and optional count information for notes with children.
-
-**Examples:**
-```python
-# List all top-level notes
-list_notes()
-
-# List child notes under "project_alpha"
-list_notes(parent="project_alpha")
-```
+List notes at a specific hierarchy level. Returns note info including title, tags, and child counts.
+- `parent` (str, optional): Parent directory to list children from (omit for top-level)
 
 #### `update_note`
-Update an existing note's content and tags, including nested notes.
-
-**Parameters:**
-- `filename` (str): The note filename to update (e.g., "my_note.md" or "parent_name/child_note.md")
-- `content` (str): The new note content
-- `tags` (List[str], optional): New list of tags for the note
-
-Note: The note's title will be preserved from the original note.
-
-**Examples:**
-```python
-# Update a top-level note
-update_note(
-    filename="project_alpha.md",
-    content="Updated project documentation",
-    tags=["project", "work", "updated"]
-)
-
-# Update a nested note
-update_note(
-    filename="project_alpha/meeting_notes.md",
-    content="Updated meeting notes with action items",
-    tags=["meetings", "action-items"]
-)
-```
+Update existing note content and tags while preserving the title.
+- `filename` (str): Note filename to update
+- `content` (str): New note content
+- `tags` (List[str], optional): New tags for the note
 
 #### `delete_note`
-Delete a note by filename. Empty parent directories are automatically cleaned up.
+Delete a note by filename with automatic cleanup of empty directories.
+- `filename` (str): Note filename to delete
 
-**Parameters:**
-- `filename` (str): The note filename to delete (e.g., "my_note.md" or "parent_name/child_note.md")
+#### `move_note`
+Move a note to a different directory and update all references in other notes.
+- `filename` (str): Note filename to move
+- `target_folder` (str, optional): Target directory (None for root)
+
+#### `add_tags`
+Add new tags to an existing note, avoiding duplicates.
+- `filename` (str): Note filename to add tags to
+- `tags` (List[str]): Tags to add
+
+#### `remove_tags`
+Remove specified tags from an existing note.
+- `filename` (str): Note filename to remove tags from  
+- `tags` (List[str]): Tags to remove
+
+**Example Usage:**
+```python
+# Create and organize notes
+add_note(title="Project Alpha", content="Main project docs", tags=["project"])
+add_note(title="Tasks", content="Task list", parent="project_alpha")
+
+# Manage tags
+add_tags(filename="project_alpha.md", tags=["urgent", "review"])
+remove_tags(filename="project_alpha.md", tags=["review"])
+
+# Move and reorganize
+move_note(filename="project_alpha/tasks.md", target_folder="archive")
+```
 
 ## File Structure
 
