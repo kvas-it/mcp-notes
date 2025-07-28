@@ -557,3 +557,298 @@ def test_count_with_existing_notes_migration(storage):
     # Should now have count information
     assert parent_note['children_count'] == 1
     assert parent_note['descendant_count'] == 1
+
+
+# Tests for move_note functionality
+def test_move_note_to_root(storage):
+    """Test moving a note from subfolder to root directory."""
+    # Create parent and child notes
+    storage.add_note('Parent Note', 'Parent content', ['parent'])
+    storage.add_note('Child Note', 'Child content', ['child'], parent='parent_note')
+
+    # Move child to root
+    new_filename = storage.move_note(
+        filename='parent_note/child_note.md', target_folder=None
+    )
+
+    # Check new filename
+    assert new_filename == 'child_note.md'
+
+    # Check that note exists in new location
+    root_content = storage.get_note(filename='child_note.md')
+    expected = '# Child Note\nTags: child\n\nChild content'
+    assert root_content == expected
+
+    # Check that note no longer exists in old location
+    old_content = storage.get_note(filename='parent_note/child_note.md')
+    assert old_content is None
+
+    # Check indexes are updated
+    root_notes = storage.list_notes()
+    child_titles = {note['title'] for note in root_notes}
+    assert 'Child Note' in child_titles
+
+    parent_notes = storage.list_notes(parent='parent_note')
+    child_titles_in_parent = {note['title'] for note in parent_notes}
+    assert 'Child Note' not in child_titles_in_parent
+
+
+def test_move_note_to_subfolder(storage):
+    """Test moving a note from root to subfolder."""
+    # Create notes
+    storage.add_note('Root Note', 'Root content', ['root'])
+    storage.add_note('Archive Folder', 'Archive content', ['archive'])
+
+    # Move root note to archive folder
+    new_filename = storage.move_note(
+        filename='root_note.md', target_folder='archive_folder'
+    )
+
+    # Check new filename
+    assert new_filename == 'archive_folder/root_note.md'
+
+    # Check that note exists in new location
+    moved_content = storage.get_note(filename='archive_folder/root_note.md')
+    expected = '# Root Note\nTags: root\n\nRoot content'
+    assert moved_content == expected
+
+    # Check that note no longer exists in old location
+    old_content = storage.get_note(filename='root_note.md')
+    assert old_content is None
+
+    # Check indexes are updated
+    root_notes = storage.list_notes()
+    root_titles = {note['title'] for note in root_notes}
+    assert 'Root Note' not in root_titles
+
+    archive_notes = storage.list_notes(parent='archive_folder')
+    archive_titles = {note['title'] for note in archive_notes}
+    assert 'Root Note' in archive_titles
+
+
+def test_move_note_between_subfolders(storage):
+    """Test moving a note from one subfolder to another."""
+    # Create folder structure
+    storage.add_note('Folder A', 'Folder A content', ['folderA'])
+    storage.add_note('Folder B', 'Folder B content', ['folderB'])
+    storage.add_note('Task', 'Task content', ['task'], parent='folder_a')
+
+    # Move task from folder A to folder B
+    new_filename = storage.move_note(
+        filename='folder_a/task.md', target_folder='folder_b'
+    )
+
+    # Check new filename
+    assert new_filename == 'folder_b/task.md'
+
+    # Check that note exists in new location
+    moved_content = storage.get_note(filename='folder_b/task.md')
+    expected = '# Task\nTags: task\n\nTask content'
+    assert moved_content == expected
+
+    # Check that note no longer exists in old location
+    old_content = storage.get_note(filename='folder_a/task.md')
+    assert old_content is None
+
+    # Check indexes are updated
+    folder_a_notes = storage.list_notes(parent='folder_a')
+    folder_a_titles = {note['title'] for note in folder_a_notes}
+    assert 'Task' not in folder_a_titles
+
+    folder_b_notes = storage.list_notes(parent='folder_b')
+    folder_b_titles = {note['title'] for note in folder_b_notes}
+    assert 'Task' in folder_b_titles
+
+
+def test_move_note_to_nested_folder(storage):
+    """Test moving a note to a deeply nested folder."""
+    # Create structure
+    storage.add_note('Project', 'Project content', ['project'])
+    storage.add_note('Archive', 'Archive content', ['archive'], parent='project')
+    storage.add_note('Task', 'Task content', ['task'])
+
+    # Move task to nested location
+    new_filename = storage.move_note(
+        filename='task.md', target_folder='project/archive'
+    )
+
+    # Check new filename
+    assert new_filename == 'project/archive/task.md'
+
+    # Check that note exists in new location
+    moved_content = storage.get_note(filename='project/archive/task.md')
+    expected = '# Task\nTags: task\n\nTask content'
+    assert moved_content == expected
+
+    # Check that nested index is updated
+    nested_notes = storage.list_notes(parent='project/archive')
+    nested_titles = {note['title'] for note in nested_notes}
+    assert 'Task' in nested_titles
+
+
+def test_move_note_updates_references(storage):
+    """Test that moving a note updates references in other notes."""
+    # Create notes with references
+    storage.add_note('Main', 'See also task.md for details', ['main'])
+    storage.add_note('Other', 'Related to task.md', ['other'])
+    storage.add_note('Task', 'Task content', ['task'])
+    storage.add_note('Archive', 'Archive content', ['archive'])
+
+    # Move task to archive folder
+    storage.move_note(filename='task.md', target_folder='archive')
+
+    # Check that references were updated
+    main_content = storage.get_note(filename='main.md')
+    assert 'archive/task.md' in main_content
+    assert 'task.md' not in main_content.replace('archive/task.md', '')
+
+    other_content = storage.get_note(filename='other.md')
+    assert 'archive/task.md' in other_content
+    assert 'task.md' not in other_content.replace('archive/task.md', '')
+
+
+def test_move_note_handles_duplicate_names(storage):
+    """Test that moving a note handles duplicate names in target folder."""
+    # Create notes with same title in different locations
+    storage.add_note('Task A', 'Root task', ['root'])
+    storage.add_note('Archive', 'Archive content', ['archive'])
+    storage.add_note('Task B', 'Archive task', ['archived'], parent='archive')
+
+    # Move root task to archive (should get unique name)
+    new_filename = storage.move_note(filename='task_a.md', target_folder='archive')
+
+    # Should get unique filename based on title
+    assert new_filename == 'archive/task_a.md'
+
+    # Both tasks should exist in archive
+    archive_notes = storage.list_notes(parent='archive')
+    assert len(archive_notes) == 2
+
+    archive_titles = {note['title'] for note in archive_notes}
+    assert 'Task A' in archive_titles  # Moved task
+    assert 'Task B' in archive_titles  # Original archive task
+
+
+def test_move_note_updates_parent_counts(storage):
+    """Test that moving notes updates parent children/descendant counts."""
+    # Create hierarchy
+    storage.add_note('Project A', 'Project A content', ['projectA'])
+    storage.add_note('Project B', 'Project B content', ['projectB'])
+    storage.add_note('Task 1', 'Task 1 content', ['task'], parent='project_a')
+    storage.add_note('Task 2', 'Task 2 content', ['task'], parent='project_a')
+
+    # Check initial counts
+    root_notes = storage.list_notes()
+    project_a = next(note for note in root_notes if note['title'] == 'Project A')
+    project_b = next(note for note in root_notes if note['title'] == 'Project B')
+
+    assert project_a['children_count'] == 2
+    assert project_a['descendant_count'] == 2
+    assert 'children_count' not in project_b  # No children yet
+
+    # Move one task from A to B
+    storage.move_note(filename='project_a/task_1.md', target_folder='project_b')
+
+    # Check updated counts
+    root_notes = storage.list_notes()
+    project_a = next(note for note in root_notes if note['title'] == 'Project A')
+    project_b = next(note for note in root_notes if note['title'] == 'Project B')
+
+    assert project_a['children_count'] == 1
+    assert project_a['descendant_count'] == 1
+    assert project_b['children_count'] == 1
+    assert project_b['descendant_count'] == 1
+
+
+def test_move_note_cleans_up_empty_directories(storage):
+    """Test that moving the last note from a folder cleans up the empty directory."""
+    # Create hierarchy
+    storage.add_note('Project', 'Project content', ['project'])
+    storage.add_note('Only Task', 'Only task content', ['task'], parent='project')
+
+    project_dir = storage.directory / 'project'
+    assert project_dir.exists()
+
+    # Move the only task to root
+    storage.move_note(filename='project/only_task.md', target_folder=None)
+
+    # Directory should be cleaned up
+    assert not project_dir.exists()
+
+
+def test_move_note_no_op_same_location(storage):
+    """Test that moving a note to its current location is a no-op."""
+    # Create note
+    storage.add_note('Task', 'Task content', ['task'])
+
+    # Try to move to same location
+    new_filename = storage.move_note(filename='task.md', target_folder=None)
+
+    # Should return same filename
+    assert new_filename == 'task.md'
+
+    # Note should still exist and be unchanged
+    content = storage.get_note(filename='task.md')
+    expected = '# Task\nTags: task\n\nTask content'
+    assert content == expected
+
+
+def test_move_note_nonexistent_source(storage):
+    """Test that moving a nonexistent note raises an error."""
+    with pytest.raises(ValueError, match="Source note 'nonexistent.md' not found"):
+        storage.move_note(filename='nonexistent.md', target_folder='archive')
+
+
+def test_move_note_preserves_title_and_tags(storage):
+    """Test that moving a note preserves the original title and tags."""
+    # Create note with specific title and tags
+    storage.add_note(
+        'Complex Title with Special Characters!',
+        'Content here',
+        ['tag1', 'tag2', 'tag3'],
+    )
+    storage.add_note('Archive', 'Archive content', ['archive'])
+
+    # Move to archive
+    new_filename = storage.move_note(
+        filename='complex_title_with_special_characters.md', target_folder='archive'
+    )
+
+    # Check that title and tags are preserved
+    moved_content = storage.get_note(filename=new_filename)
+    assert moved_content.startswith('# Complex Title with Special Characters!')
+    assert 'Tags: tag1, tag2, tag3' in moved_content
+    assert 'Content here' in moved_content
+
+    # Check that index has correct metadata
+    archive_notes = storage.list_notes(parent='archive')
+    moved_note = next(
+        note
+        for note in archive_notes
+        if note['title'] == 'Complex Title with Special Characters!'
+    )
+    assert moved_note['tags'] == ['tag1', 'tag2', 'tag3']
+
+
+def test_move_note_deep_nesting(storage):
+    """Test moving notes in deeply nested hierarchies."""
+    # Create deep hierarchy
+    storage.add_note('Level 1', 'L1 content', ['l1'])
+    storage.add_note('Level 2', 'L2 content', ['l2'], parent='level_1')
+    storage.add_note('Level 3', 'L3 content', ['l3'], parent='level_1/level_2')
+    storage.add_note('Task', 'Task content', ['task'], parent='level_1/level_2/level_3')
+
+    # Move deeply nested task to root
+    new_filename = storage.move_note(
+        filename='level_1/level_2/level_3/task.md', target_folder=None
+    )
+
+    # Check new location
+    assert new_filename == 'task.md'
+    root_content = storage.get_note(filename='task.md')
+    expected = '# Task\nTags: task\n\nTask content'
+    assert root_content == expected
+
+    # Check old location is gone
+    old_content = storage.get_note(filename='level_1/level_2/level_3/task.md')
+    assert old_content is None

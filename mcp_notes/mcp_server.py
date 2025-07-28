@@ -161,3 +161,44 @@ def update_note(filename: str, content: str, tags: List[str] = None) -> str:
         raise ValueError(f"Note '{filename}' not found")
 
     return f"Note '{filename}' updated"
+
+
+@app.tool
+def move_note(filename: str, target_folder: Optional[str] = None) -> str:
+    """Move a note to a different folder and update all references.
+
+    Args:
+        filename: The note filename to move. Can be:
+                 - Top-level: "my_note.md"
+                 - Nested: "parent_name/child_note.md"
+                 - Deep nested: "grandparent/parent/child.md"
+        target_folder: Target folder name. Can be:
+                      - None or empty string for root directory
+                      - "folder_name" for moving to subfolder
+                      - "parent/subfolder" for moving to nested folder
+
+    Returns:
+        Success message with the new filename after moving
+
+    Behavior:
+        - Moves the note file to the target location
+        - Updates all index files appropriately
+        - Updates parent/child counts automatically
+        - Searches all existing notes for references to the old filename and replaces them with the new filename
+        - Automatically cleans up empty directories when notes are moved out
+        - Ensures unique filenames in the target directory
+
+    Examples:
+        - move_note("my_note.md", None) - moves to root directory
+        - move_note("my_note.md", "projects") - moves to projects/ subfolder
+        - move_note("projects/task.md", "archive") - moves from projects/ to archive/
+        - move_note("projects/task.md", "projects/completed") - moves to nested subfolder
+    """
+    # Convert empty string to None for consistency
+    if target_folder is not None and target_folder.strip() == '':
+        target_folder = None
+
+    new_filename = app.storage.move_note(filename=filename, target_folder=target_folder)
+
+    target_desc = f"to '{target_folder}/'" if target_folder else 'to root directory'
+    return f"Note '{filename}' moved {target_desc} as '{new_filename}'"

@@ -397,3 +397,166 @@ class Storage:
         self._save_index(index, target_dir)
 
         return True
+
+    def move_note(self, *, filename: str, target_folder: Optional[str] = None) -> str:
+        """Move a note to a different folder and update all references.
+
+        Args:
+            filename: The note filename to move (e.g., "note.md" or "parent/child.md")
+            target_folder: Target folder name (None for root, "folder" for subfolder)
+
+        Returns:
+            The new filename after moving
+
+        Raises:
+            ValueError: If source note doesn't exist or target would create duplicate
+        """
+        # Check if source note exists
+        source_path = self.directory / filename
+        if not source_path.exists():
+            raise ValueError(f"Source note '{filename}' not found")
+
+        # Get source note content and metadata
+        source_content = self.get_note(filename=filename)
+        if source_content is None:
+            raise ValueError(f"Could not read source note '{filename}'")
+
+        # Extract title and tags from source note
+        source_dir = self._get_directory_for_note(filename)
+        source_index_dir = source_dir if source_dir != self.directory else None
+        source_index = self._load_index(source_index_dir)
+
+        source_title = None
+        source_tags = []
+        for title, data in source_index.items():
+            if data['filename'] == filename:
+                source_title = title
+                source_tags = data['tags']
+                break
+
+        if not source_title:
+            raise ValueError(f"Could not find metadata for note '{filename}'")
+
+        # Normalize target folder
+        target_folder = self._normalize_parent(target_folder)
+
+        # Determine new filename
+        base_filename = self._title_to_filename(source_title)
+
+        # Check if this would be a no-op move first (before ensuring unique names)
+        if target_folder:
+            potential_new_filename = f'{target_folder}/{base_filename}'
+        else:
+            potential_new_filename = base_filename
+
+        if filename == potential_new_filename:
+            return filename
+
+        if target_folder:
+            # Moving to subfolder
+            target_dir = self.directory / target_folder
+            target_dir.mkdir(parents=True, exist_ok=True)
+            new_filename_base = self._ensure_unique_filename_in_dir(
+                base_filename, target_dir
+            )
+            new_full_filename = f'{target_folder}/{new_filename_base}'
+            new_path = target_dir / new_filename_base
+        else:
+            # Moving to root
+            new_filename_base = self._ensure_unique_filename(base_filename)
+            new_full_filename = new_filename_base
+            new_path = self.directory / new_filename_base
+
+        # Extract content without title and tags lines
+        lines = source_content.split('\n')
+        if lines and lines[0].startswith('# '):
+            # Skip title line
+            content_start = 1
+            if len(lines) > 1 and lines[1].startswith('Tags: '):
+                # Skip tags line too
+                content_start = 2
+                if len(lines) > 2 and lines[2] == '':
+                    # Skip empty line after tags
+                    content_start = 3
+            content = '\n'.join(lines[content_start:])
+        else:
+            content = source_content
+
+        # Write note to new location
+        tags_str = ', '.join(source_tags) if source_tags else ''
+        new_content = f'# {source_title}\nTags: {tags_str}\n\n{content}'
+
+        with open(new_path, 'w') as f:
+            f.write(new_content)
+
+        # Update target directory index
+        if target_folder:
+            target_index_dir = self.directory / target_folder
+            target_index = self._load_index(target_index_dir)
+        else:
+            target_index_dir = None
+            target_index = self._load_index()
+
+        target_index[source_title] = {
+            'filename': new_full_filename,
+            'tags': source_tags,
+        }
+        self._save_index(target_index, target_index_dir)
+
+        # Remove from source index
+        del source_index[source_title]
+        self._save_index(source_index, source_index_dir)
+
+        # Delete original file
+        source_path.unlink()
+
+        # Update parent counts
+        if source_dir != self.directory:
+            self._update_parent_counts(filename, -1)
+        if target_folder:
+            self._update_parent_counts(new_full_filename, 1)
+
+        # Clean up empty source directory
+        if source_dir != self.directory:
+            self._cleanup_empty_directory(source_dir)
+
+        # Update all references in other notes
+        self._update_note_references(filename, new_full_filename)
+
+        return new_full_filename
+
+    def _update_note_references(self, old_filename: str, new_filename: str) -> None:
+        """Update all references to a moved note in other notes."""
+        # Get all note files recursively
+        all_notes = []
+
+        def collect_notes(directory: Path):
+            for item in directory.iterdir():
+                if item.is_file() and item.name.endswith('.md'):
+                    # Get relative path from base directory
+                    rel_path = item.relative_to(self.directory)
+                    all_notes.append(str(rel_path))
+                elif item.is_dir() and item.name != '__pycache__':
+                    collect_notes(item)
+
+        collect_notes(self.directory)
+
+        # Update references in each note
+        for note_filename in all_notes:
+            if note_filename == new_filename:
+                # Skip the moved note itself
+                continue
+
+            note_path = self.directory / note_filename
+            try:
+                with open(note_path, 'r') as f:
+                    content = f.read()
+
+                # Simple text replacement as specified in TODO
+                if old_filename in content:
+                    updated_content = content.replace(old_filename, new_filename)
+                    with open(note_path, 'w') as f:
+                        f.write(updated_content)
+            except (IOError, OSError):
+                # Skip files that can't be read/written
+                continue

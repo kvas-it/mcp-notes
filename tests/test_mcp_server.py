@@ -438,3 +438,217 @@ async def test_count_information_via_mcp(mcp_server):
         for child_note in child_result.data:
             assert child_note['children_count'] is None
             assert child_note['descendant_count'] is None
+
+
+# Tests for move_note functionality via MCP server
+@pytest.mark.asyncio
+async def test_move_note_to_root_via_mcp(mcp_server):
+    """Test moving a note to root directory via MCP server."""
+    async with Client(mcp_server) as client:
+        # Create parent and child notes
+        await client.call_tool(
+            'add_note',
+            {'title': 'Parent Note', 'content': 'Parent content', 'tags': ['parent']},
+        )
+        await client.call_tool(
+            'add_note',
+            {
+                'title': 'Child Note',
+                'content': 'Child content',
+                'tags': ['child'],
+                'parent': 'parent_note',
+            },
+        )
+
+        # Move child to root
+        result = await client.call_tool(
+            'move_note',
+            {'filename': 'parent_note/child_note.md', 'target_folder': None},
+        )
+
+        assert 'moved to root directory' in result.data
+        assert 'child_note.md' in result.data
+
+        # Verify note exists in new location
+        get_result = await client.call_tool('get_note', {'filename': 'child_note.md'})
+        assert '# Child Note' in get_result.data
+        assert 'Child content' in get_result.data
+
+        # Verify note no longer exists in old location
+        with pytest.raises(Exception):
+            await client.call_tool(
+                'get_note', {'filename': 'parent_note/child_note.md'}
+            )
+
+
+@pytest.mark.asyncio
+async def test_move_note_to_subfolder_via_mcp(mcp_server):
+    """Test moving a note to subfolder via MCP server."""
+    async with Client(mcp_server) as client:
+        # Create notes
+        await client.call_tool(
+            'add_note',
+            {'title': 'Root Note', 'content': 'Root content', 'tags': ['root']},
+        )
+        await client.call_tool(
+            'add_note',
+            {'title': 'Archive', 'content': 'Archive content', 'tags': ['archive']},
+        )
+
+        # Move root note to archive folder
+        result = await client.call_tool(
+            'move_note', {'filename': 'root_note.md', 'target_folder': 'archive'}
+        )
+
+        assert 'moved to' in result.data
+        assert 'archive/' in result.data
+        assert 'archive/root_note.md' in result.data
+
+        # Verify note exists in new location
+        get_result = await client.call_tool(
+            'get_note', {'filename': 'archive/root_note.md'}
+        )
+        assert '# Root Note' in get_result.data
+        assert 'Root content' in get_result.data
+
+
+@pytest.mark.asyncio
+async def test_move_note_updates_references_via_mcp(mcp_server):
+    """Test that move_note updates references in other notes via MCP server."""
+    async with Client(mcp_server) as client:
+        # Create notes with references
+        await client.call_tool(
+            'add_note',
+            {
+                'title': 'Main Note',
+                'content': 'See task.md for details',
+                'tags': ['main'],
+            },
+        )
+        await client.call_tool(
+            'add_note',
+            {'title': 'Task', 'content': 'Task content', 'tags': ['task']},
+        )
+        await client.call_tool(
+            'add_note',
+            {'title': 'Archive', 'content': 'Archive content', 'tags': ['archive']},
+        )
+
+        # Move task to archive
+        await client.call_tool(
+            'move_note', {'filename': 'task.md', 'target_folder': 'archive'}
+        )
+
+        # Check that reference was updated
+        main_result = await client.call_tool('get_note', {'filename': 'main_note.md'})
+        assert 'archive/task.md' in main_result.data
+        # Ensure old reference is gone (not just appended)
+        content_without_new_ref = main_result.data.replace('archive/task.md', '')
+        assert 'task.md' not in content_without_new_ref
+
+
+@pytest.mark.asyncio
+async def test_move_note_empty_string_target_via_mcp(mcp_server):
+    """Test that empty string target_folder is treated as None via MCP server."""
+    async with Client(mcp_server) as client:
+        # Create parent and child
+        await client.call_tool(
+            'add_note',
+            {'title': 'Parent', 'content': 'Parent content', 'tags': ['parent']},
+        )
+        await client.call_tool(
+            'add_note',
+            {
+                'title': 'Child',
+                'content': 'Child content',
+                'tags': ['child'],
+                'parent': 'parent',
+            },
+        )
+
+        # Move child to root using empty string
+        result = await client.call_tool(
+            'move_note', {'filename': 'parent/child.md', 'target_folder': ''}
+        )
+
+        assert 'moved to root directory' in result.data
+
+        # Verify it's in root
+        get_result = await client.call_tool('get_note', {'filename': 'child.md'})
+        assert '# Child' in get_result.data
+
+
+@pytest.mark.asyncio
+async def test_move_note_nonexistent_via_mcp(mcp_server):
+    """Test moving a nonexistent note via MCP server."""
+    async with Client(mcp_server) as client:
+        with pytest.raises(Exception) as exc_info:
+            await client.call_tool(
+                'move_note',
+                {'filename': 'nonexistent.md', 'target_folder': 'archive'},
+            )
+        assert 'not found' in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_move_note_updates_counts_via_mcp(mcp_server):
+    """Test that moving notes updates parent counts via MCP server."""
+    async with Client(mcp_server) as client:
+        # Create projects with tasks
+        await client.call_tool(
+            'add_note',
+            {
+                'title': 'Project A',
+                'content': 'Project A content',
+                'tags': ['projectA'],
+            },
+        )
+        await client.call_tool(
+            'add_note',
+            {
+                'title': 'Project B',
+                'content': 'Project B content',
+                'tags': ['projectB'],
+            },
+        )
+        await client.call_tool(
+            'add_note',
+            {
+                'title': 'Task',
+                'content': 'Task content',
+                'tags': ['task'],
+                'parent': 'project_a',
+            },
+        )
+
+        # Check initial counts
+        initial_result = await client.call_tool('list_notes', {})
+        project_a = next(
+            note for note in initial_result.data if note['title'] == 'Project A'
+        )
+        project_b = next(
+            note for note in initial_result.data if note['title'] == 'Project B'
+        )
+
+        assert project_a['children_count'] == 1
+        assert project_a['descendant_count'] == 1
+        assert project_b['children_count'] is None
+
+        # Move task from A to B
+        await client.call_tool(
+            'move_note',
+            {'filename': 'project_a/task.md', 'target_folder': 'project_b'},
+        )
+
+        # Check updated counts
+        updated_result = await client.call_tool('list_notes', {})
+        project_a = next(
+            note for note in updated_result.data if note['title'] == 'Project A'
+        )
+        project_b = next(
+            note for note in updated_result.data if note['title'] == 'Project B'
+        )
+
+        assert project_a['children_count'] is None  # No children left
+        assert project_b['children_count'] == 1
+        assert project_b['descendant_count'] == 1
