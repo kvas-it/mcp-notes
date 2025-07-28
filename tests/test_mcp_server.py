@@ -652,3 +652,298 @@ async def test_move_note_updates_counts_via_mcp(mcp_server):
         assert project_a['children_count'] is None  # No children left
         assert project_b['children_count'] == 1
         assert project_b['descendant_count'] == 1
+
+
+# Tests for tag management via MCP server
+@pytest.mark.asyncio
+async def test_add_tags_via_mcp(mcp_server):
+    """Test adding tags to a note via MCP server."""
+    async with Client(mcp_server) as client:
+        # Create a note with initial tags
+        await client.call_tool(
+            'add_note',
+            {
+                'title': 'Test Note',
+                'content': 'Test content',
+                'tags': ['initial', 'tag'],
+            },
+        )
+
+        # Add new tags
+        result = await client.call_tool(
+            'add_tags', {'filename': 'test_note.md', 'tags': ['new', 'added']}
+        )
+
+        assert 'new, added' in result.data
+        assert 'added to note' in result.data
+        assert 'test_note.md' in result.data
+
+        # Verify tags were added
+        get_result = await client.call_tool('get_note', {'filename': 'test_note.md'})
+        assert 'Tags: added, initial, new, tag' in get_result.data
+
+
+@pytest.mark.asyncio
+async def test_add_tags_avoids_duplicates_via_mcp(mcp_server):
+    """Test that adding existing tags avoids duplicates via MCP server."""
+    async with Client(mcp_server) as client:
+        # Create a note with initial tags
+        await client.call_tool(
+            'add_note',
+            {
+                'title': 'Test Note',
+                'content': 'Test content',
+                'tags': ['existing', 'tag'],
+            },
+        )
+
+        # Try to add tags, including one that already exists
+        result = await client.call_tool(
+            'add_tags', {'filename': 'test_note.md', 'tags': ['existing', 'new']}
+        )
+
+        assert 'existing, new' in result.data
+        assert 'added to note' in result.data
+
+        # Verify no duplicates
+        get_result = await client.call_tool('get_note', {'filename': 'test_note.md'})
+        content = get_result.data
+        assert content.count('existing') == 1
+
+
+@pytest.mark.asyncio
+async def test_add_tags_to_hierarchical_note_via_mcp(mcp_server):
+    """Test adding tags to hierarchical notes via MCP server."""
+    async with Client(mcp_server) as client:
+        # Create parent and child notes
+        await client.call_tool(
+            'add_note',
+            {'title': 'Parent Note', 'content': 'Parent content', 'tags': ['parent']},
+        )
+        await client.call_tool(
+            'add_note',
+            {
+                'title': 'Child Note',
+                'content': 'Child content',
+                'tags': ['child'],
+                'parent': 'parent_note',
+            },
+        )
+
+        # Add tags to child note
+        result = await client.call_tool(
+            'add_tags',
+            {'filename': 'parent_note/child_note.md', 'tags': ['new', 'hierarchical']},
+        )
+
+        assert 'new, hierarchical' in result.data
+        assert 'parent_note/child_note.md' in result.data
+
+        # Verify tags were added to child
+        get_result = await client.call_tool(
+            'get_note', {'filename': 'parent_note/child_note.md'}
+        )
+        assert 'Tags: child, hierarchical, new' in get_result.data
+
+
+@pytest.mark.asyncio
+async def test_add_tags_not_found_via_mcp(mcp_server):
+    """Test adding tags to a non-existent note via MCP server."""
+    async with Client(mcp_server) as client:
+        with pytest.raises(Exception) as exc_info:
+            await client.call_tool(
+                'add_tags', {'filename': 'non_existent.md', 'tags': ['new']}
+            )
+        assert 'not found' in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_remove_tags_via_mcp(mcp_server):
+    """Test removing tags from a note via MCP server."""
+    async with Client(mcp_server) as client:
+        # Create a note with multiple tags
+        await client.call_tool(
+            'add_note',
+            {
+                'title': 'Test Note',
+                'content': 'Test content',
+                'tags': ['tag1', 'tag2', 'tag3', 'tag4'],
+            },
+        )
+
+        # Remove some tags
+        result = await client.call_tool(
+            'remove_tags', {'filename': 'test_note.md', 'tags': ['tag2', 'tag4']}
+        )
+
+        assert 'tag2, tag4' in result.data
+        assert 'removed from note' in result.data
+        assert 'test_note.md' in result.data
+
+        # Verify tags were removed
+        get_result = await client.call_tool('get_note', {'filename': 'test_note.md'})
+        assert 'Tags: tag1, tag3' in get_result.data
+
+
+@pytest.mark.asyncio
+async def test_remove_tags_nonexistent_via_mcp(mcp_server):
+    """Test removing non-existent tags via MCP server."""
+    async with Client(mcp_server) as client:
+        # Create a note with some tags
+        await client.call_tool(
+            'add_note',
+            {
+                'title': 'Test Note',
+                'content': 'Test content',
+                'tags': ['existing', 'tag'],
+            },
+        )
+
+        # Try to remove tags that don't exist
+        result = await client.call_tool(
+            'remove_tags',
+            {'filename': 'test_note.md', 'tags': ['nonexistent', 'missing']},
+        )
+
+        assert 'nonexistent, missing' in result.data
+        assert 'removed from note' in result.data
+
+        # Verify existing tags are unchanged
+        get_result = await client.call_tool('get_note', {'filename': 'test_note.md'})
+        assert 'Tags: existing, tag' in get_result.data
+
+
+@pytest.mark.asyncio
+async def test_remove_all_tags_via_mcp(mcp_server):
+    """Test removing all tags from a note via MCP server."""
+    async with Client(mcp_server) as client:
+        # Create a note with tags
+        await client.call_tool(
+            'add_note',
+            {
+                'title': 'Test Note',
+                'content': 'Test content',
+                'tags': ['tag1', 'tag2'],
+            },
+        )
+
+        # Remove all tags
+        result = await client.call_tool(
+            'remove_tags', {'filename': 'test_note.md', 'tags': ['tag1', 'tag2']}
+        )
+
+        assert 'tag1, tag2' in result.data
+        assert 'removed from note' in result.data
+
+        # Verify all tags are gone
+        get_result = await client.call_tool('get_note', {'filename': 'test_note.md'})
+        assert 'Tags: \n\n' in get_result.data
+
+        # Verify index is updated
+        list_result = await client.call_tool('list_notes', {})
+        test_note = next(
+            note for note in list_result.data if note['title'] == 'Test Note'
+        )
+        assert test_note['tags'] == []
+
+
+@pytest.mark.asyncio
+async def test_remove_tags_from_hierarchical_note_via_mcp(mcp_server):
+    """Test removing tags from hierarchical notes via MCP server."""
+    async with Client(mcp_server) as client:
+        # Create parent and child notes
+        await client.call_tool(
+            'add_note',
+            {'title': 'Parent Note', 'content': 'Parent content', 'tags': ['parent']},
+        )
+        await client.call_tool(
+            'add_note',
+            {
+                'title': 'Child Note',
+                'content': 'Child content',
+                'tags': ['child', 'draft', 'review'],
+                'parent': 'parent_note',
+            },
+        )
+
+        # Remove tags from child note
+        result = await client.call_tool(
+            'remove_tags',
+            {'filename': 'parent_note/child_note.md', 'tags': ['draft', 'review']},
+        )
+
+        assert 'draft, review' in result.data
+        assert 'parent_note/child_note.md' in result.data
+
+        # Verify tags were removed from child
+        get_result = await client.call_tool(
+            'get_note', {'filename': 'parent_note/child_note.md'}
+        )
+        assert 'Tags: child\n\n' in get_result.data
+
+        # Verify index is updated
+        child_list_result = await client.call_tool(
+            'list_notes', {'parent': 'parent_note'}
+        )
+        child_note = next(
+            note for note in child_list_result.data if note['title'] == 'Child Note'
+        )
+        assert child_note['tags'] == ['child']
+
+
+@pytest.mark.asyncio
+async def test_remove_tags_not_found_via_mcp(mcp_server):
+    """Test removing tags from a non-existent note via MCP server."""
+    async with Client(mcp_server) as client:
+        with pytest.raises(Exception) as exc_info:
+            await client.call_tool(
+                'remove_tags', {'filename': 'non_existent.md', 'tags': ['tag']}
+            )
+        assert 'not found' in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_tag_operations_preserve_content_via_mcp(mcp_server):
+    """Test that tag operations preserve note title and content via MCP server."""
+    async with Client(mcp_server) as client:
+        original_title = 'Complex Title with Special Characters!'
+        original_content = (
+            'This is some complex content\nwith multiple lines\n\nand empty lines.'
+        )
+
+        # Create note
+        await client.call_tool(
+            'add_note',
+            {
+                'title': original_title,
+                'content': original_content,
+                'tags': ['initial'],
+            },
+        )
+
+        # Add tags
+        await client.call_tool(
+            'add_tags',
+            {
+                'filename': 'complex_title_with_special_characters.md',
+                'tags': ['added'],
+            },
+        )
+
+        # Remove tags
+        await client.call_tool(
+            'remove_tags',
+            {
+                'filename': 'complex_title_with_special_characters.md',
+                'tags': ['initial'],
+            },
+        )
+
+        # Check that title and content are preserved
+        final_result = await client.call_tool(
+            'get_note', {'filename': 'complex_title_with_special_characters.md'}
+        )
+        final_content = final_result.data
+        assert f'# {original_title}' in final_content
+        assert original_content in final_content
+        assert 'Tags: added' in final_content

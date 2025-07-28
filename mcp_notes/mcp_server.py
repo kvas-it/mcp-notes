@@ -202,3 +202,68 @@ def move_note(filename: str, target_folder: Optional[str] = None) -> str:
 
     target_desc = f"to '{target_folder}/'" if target_folder else 'to root directory'
     return f"Note '{filename}' moved {target_desc} as '{new_filename}'"
+
+
+@app.tool
+def add_tags(filename: str, tags: List[str]) -> str:
+    """Add new tags to an existing note.
+
+    Args:
+        filename: The note filename to add tags to. Can be:
+                 - Top-level: "my_note.md"
+                 - Nested: "parent_name/child_note.md"
+                 - Deep nested: "grandparent/parent/child.md"
+        tags: List of tags to add to the note
+
+    Returns:
+        Success message confirming the tags were added
+
+    Behavior:
+        - Loads existing tags from the note
+        - Adds new tags to the existing ones (avoiding duplicates)
+        - Updates both the note file and the index
+        - Preserves the note's title and content
+
+    Examples:
+        - add_tags("project.md", ["urgent", "review"]) - adds tags to top-level note
+        - add_tags("project/task.md", ["completed"]) - adds tag to nested note
+    """
+    success = app.storage.add_tags(filename=filename, tags_to_add=tags)
+    if not success:
+        raise ValueError(f"Note '{filename}' not found")
+
+    tags_str = ', '.join(tags)
+    return f"Tags '{tags_str}' added to note '{filename}'"
+
+
+@app.tool
+def remove_tags(filename: str, tags: List[str]) -> str:
+    """Remove specified tags from an existing note.
+
+    Args:
+        filename: The note filename to remove tags from. Can be:
+                 - Top-level: "my_note.md"
+                 - Nested: "parent_name/child_note.md"
+                 - Deep nested: "grandparent/parent/child.md"
+        tags: List of tags to remove from the note
+
+    Returns:
+        Success message confirming the tags were removed
+
+    Behavior:
+        - Loads existing tags from the note
+        - Removes specified tags from the existing ones
+        - Updates both the note file and the index
+        - Preserves the note's title and content
+        - Silently ignores tags that don't exist on the note
+
+    Examples:
+        - remove_tags("project.md", ["urgent"]) - removes tag from top-level note
+        - remove_tags("project/task.md", ["draft", "review"]) - removes multiple tags from nested note
+    """
+    success = app.storage.remove_tags(filename=filename, tags_to_remove=tags)
+    if not success:
+        raise ValueError(f"Note '{filename}' not found")
+
+    tags_str = ', '.join(tags)
+    return f"Tags '{tags_str}' removed from note '{filename}'"

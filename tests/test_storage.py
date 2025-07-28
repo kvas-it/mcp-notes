@@ -852,3 +852,216 @@ def test_move_note_deep_nesting(storage):
     # Check old location is gone
     old_content = storage.get_note(filename='level_1/level_2/level_3/task.md')
     assert old_content is None
+
+
+# Tests for tag management functionality
+def test_add_tags_basic(storage):
+    """Test adding tags to a note."""
+    # Create a note with initial tags
+    storage.add_note('Test Note', 'Test content', ['initial', 'tag'])
+
+    # Add new tags
+    success = storage.add_tags(filename='test_note.md', tags_to_add=['new', 'added'])
+    assert success is True
+
+    # Check file content is updated
+    content = storage.get_note(filename='test_note.md')
+    assert 'Tags: added, initial, new, tag' in content
+
+    # Check index is updated
+    notes = storage.list_notes()
+    test_note = next(note for note in notes if note['title'] == 'Test Note')
+    assert set(test_note['tags']) == {'initial', 'tag', 'new', 'added'}
+
+
+def test_add_tags_avoids_duplicates(storage):
+    """Test that adding existing tags doesn't create duplicates."""
+    # Create a note with initial tags
+    storage.add_note('Test Note', 'Test content', ['existing', 'tag'])
+
+    # Try to add tags, including one that already exists
+    success = storage.add_tags(filename='test_note.md', tags_to_add=['existing', 'new'])
+    assert success is True
+
+    # Check that duplicates are avoided
+    content = storage.get_note(filename='test_note.md')
+    assert content.count('existing') == 1
+
+    # Check index has unique tags
+    notes = storage.list_notes()
+    test_note = next(note for note in notes if note['title'] == 'Test Note')
+    assert set(test_note['tags']) == {'existing', 'tag', 'new'}
+
+
+def test_add_tags_to_empty_tags(storage):
+    """Test adding tags to a note that has no existing tags."""
+    # Create a note with no tags
+    storage.add_note('Empty Tags Note', 'Test content', [])
+
+    # Add tags
+    success = storage.add_tags(
+        filename='empty_tags_note.md', tags_to_add=['first', 'second']
+    )
+    assert success is True
+
+    # Check file content is updated
+    content = storage.get_note(filename='empty_tags_note.md')
+    assert 'Tags: first, second' in content
+
+    # Check index is updated
+    notes = storage.list_notes()
+    test_note = next(note for note in notes if note['title'] == 'Empty Tags Note')
+    assert set(test_note['tags']) == {'first', 'second'}
+
+
+def test_add_tags_not_found(storage):
+    """Test adding tags to a non-existent note."""
+    success = storage.add_tags(filename='non_existent.md', tags_to_add=['tag'])
+    assert success is False
+
+
+def test_add_tags_hierarchical(storage):
+    """Test adding tags to hierarchical notes."""
+    # Create parent and child notes
+    storage.add_note('Parent Note', 'Parent content', ['parent'])
+    storage.add_note('Child Note', 'Child content', ['child'], parent='parent_note')
+
+    # Add tags to child note
+    success = storage.add_tags(
+        filename='parent_note/child_note.md', tags_to_add=['new', 'tags']
+    )
+    assert success is True
+
+    # Check child note content
+    content = storage.get_note(filename='parent_note/child_note.md')
+    assert 'Tags: child, new, tags' in content
+
+    # Check child index is updated
+    child_notes = storage.list_notes(parent='parent_note')
+    child_note = next(note for note in child_notes if note['title'] == 'Child Note')
+    assert set(child_note['tags']) == {'child', 'new', 'tags'}
+
+
+def test_remove_tags_basic(storage):
+    """Test removing tags from a note."""
+    # Create a note with multiple tags
+    storage.add_note('Test Note', 'Test content', ['tag1', 'tag2', 'tag3', 'tag4'])
+
+    # Remove some tags
+    success = storage.remove_tags(
+        filename='test_note.md', tags_to_remove=['tag2', 'tag4']
+    )
+    assert success is True
+
+    # Check file content is updated
+    content = storage.get_note(filename='test_note.md')
+    assert 'Tags: tag1, tag3' in content
+
+    # Check index is updated
+    notes = storage.list_notes()
+    test_note = next(note for note in notes if note['title'] == 'Test Note')
+    assert set(test_note['tags']) == {'tag1', 'tag3'}
+
+
+def test_remove_tags_nonexistent(storage):
+    """Test removing tags that don't exist on the note."""
+    # Create a note with some tags
+    storage.add_note('Test Note', 'Test content', ['existing', 'tag'])
+
+    # Try to remove tags that don't exist
+    success = storage.remove_tags(
+        filename='test_note.md', tags_to_remove=['nonexistent', 'missing']
+    )
+    assert success is True
+
+    # Check that existing tags are unchanged
+    content = storage.get_note(filename='test_note.md')
+    assert 'Tags: existing, tag' in content
+
+    # Check index is unchanged
+    notes = storage.list_notes()
+    test_note = next(note for note in notes if note['title'] == 'Test Note')
+    assert set(test_note['tags']) == {'existing', 'tag'}
+
+
+def test_remove_tags_all(storage):
+    """Test removing all tags from a note."""
+    # Create a note with tags
+    storage.add_note('Test Note', 'Test content', ['tag1', 'tag2'])
+
+    # Remove all tags
+    success = storage.remove_tags(
+        filename='test_note.md', tags_to_remove=['tag1', 'tag2']
+    )
+    assert success is True
+
+    # Check file content has empty tags
+    content = storage.get_note(filename='test_note.md')
+    assert 'Tags: \n\n' in content
+
+    # Check index has empty tags
+    notes = storage.list_notes()
+    test_note = next(note for note in notes if note['title'] == 'Test Note')
+    assert test_note['tags'] == []
+
+
+def test_remove_tags_not_found(storage):
+    """Test removing tags from a non-existent note."""
+    success = storage.remove_tags(filename='non_existent.md', tags_to_remove=['tag'])
+    assert success is False
+
+
+def test_remove_tags_hierarchical(storage):
+    """Test removing tags from hierarchical notes."""
+    # Create parent and child notes
+    storage.add_note('Parent Note', 'Parent content', ['parent'])
+    storage.add_note(
+        'Child Note',
+        'Child content',
+        ['child', 'draft', 'review'],
+        parent='parent_note',
+    )
+
+    # Remove tags from child note
+    success = storage.remove_tags(
+        filename='parent_note/child_note.md', tags_to_remove=['draft', 'review']
+    )
+    assert success is True
+
+    # Check child note content
+    content = storage.get_note(filename='parent_note/child_note.md')
+    assert 'Tags: child\n\n' in content
+
+    # Check child index is updated
+    child_notes = storage.list_notes(parent='parent_note')
+    child_note = next(note for note in child_notes if note['title'] == 'Child Note')
+    assert child_note['tags'] == ['child']
+
+
+def test_tag_operations_preserve_content(storage):
+    """Test that tag operations preserve note title and content."""
+    original_title = 'Complex Title with Special Characters!'
+    original_content = (
+        'This is some complex content\nwith multiple lines\n\nand empty lines.'
+    )
+
+    # Create note
+    storage.add_note(original_title, original_content, ['initial'])
+
+    # Add tags
+    storage.add_tags(
+        filename='complex_title_with_special_characters.md', tags_to_add=['added']
+    )
+
+    # Remove tags
+    storage.remove_tags(
+        filename='complex_title_with_special_characters.md', tags_to_remove=['initial']
+    )
+
+    # Check that title and content are preserved
+    final_content = storage.get_note(
+        filename='complex_title_with_special_characters.md'
+    )
+    assert f'# {original_title}' in final_content
+    assert original_content in final_content
+    assert 'Tags: added' in final_content

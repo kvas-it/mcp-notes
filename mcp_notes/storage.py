@@ -398,6 +398,112 @@ class Storage:
 
         return True
 
+    def add_tags(self, *, filename: str, tags_to_add: List[str]) -> bool:
+        """Add new tags to an existing note."""
+        note_path = self.directory / filename
+        if not note_path.exists():
+            return False
+
+        # Determine which directory's index to update
+        note_dir = self._get_directory_for_note(filename)
+        target_dir = note_dir if note_dir != self.directory else None
+
+        # Find title and current tags from index
+        index = self._load_index(target_dir)
+        title = None
+        current_tags = []
+        for t, data in index.items():
+            if data['filename'] == filename:
+                title = t
+                current_tags = data['tags']
+                break
+
+        if not title:
+            return False
+
+        # Combine existing tags with new tags (using set to avoid duplicates, then sort for consistency)
+        updated_tags = sorted(list(set(current_tags + tags_to_add)))
+
+        # Read current note content
+        with open(note_path, 'r') as f:
+            lines = f.readlines()
+
+        # Extract content without title and tags lines
+        content_start = 1
+        if len(lines) > 1 and lines[1].startswith('Tags: '):
+            content_start = 2
+            if len(lines) > 2 and lines[2].strip() == '':
+                content_start = 3
+
+        content = ''.join(lines[content_start:])
+
+        # Format updated note content
+        tags_str = ', '.join(updated_tags) if updated_tags else ''
+        note_content = f'# {title}\nTags: {tags_str}\n\n{content}'
+
+        # Write updated note file
+        with open(note_path, 'w') as f:
+            f.write(note_content)
+
+        # Update index with new tags
+        index[title]['tags'] = updated_tags
+        self._save_index(index, target_dir)
+
+        return True
+
+    def remove_tags(self, *, filename: str, tags_to_remove: List[str]) -> bool:
+        """Remove specified tags from an existing note."""
+        note_path = self.directory / filename
+        if not note_path.exists():
+            return False
+
+        # Determine which directory's index to update
+        note_dir = self._get_directory_for_note(filename)
+        target_dir = note_dir if note_dir != self.directory else None
+
+        # Find title and current tags from index
+        index = self._load_index(target_dir)
+        title = None
+        current_tags = []
+        for t, data in index.items():
+            if data['filename'] == filename:
+                title = t
+                current_tags = data['tags']
+                break
+
+        if not title:
+            return False
+
+        # Remove specified tags
+        updated_tags = [tag for tag in current_tags if tag not in tags_to_remove]
+
+        # Read current note content
+        with open(note_path, 'r') as f:
+            lines = f.readlines()
+
+        # Extract content without title and tags lines
+        content_start = 1
+        if len(lines) > 1 and lines[1].startswith('Tags: '):
+            content_start = 2
+            if len(lines) > 2 and lines[2].strip() == '':
+                content_start = 3
+
+        content = ''.join(lines[content_start:])
+
+        # Format updated note content
+        tags_str = ', '.join(updated_tags) if updated_tags else ''
+        note_content = f'# {title}\nTags: {tags_str}\n\n{content}'
+
+        # Write updated note file
+        with open(note_path, 'w') as f:
+            f.write(note_content)
+
+        # Update index with new tags
+        index[title]['tags'] = updated_tags
+        self._save_index(index, target_dir)
+
+        return True
+
     def move_note(self, *, filename: str, target_folder: Optional[str] = None) -> str:
         """Move a note to a different folder and update all references.
 

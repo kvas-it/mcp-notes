@@ -6,13 +6,6 @@ written in Python using FastMCP.
 
 ## Tasks
 
-- Add a tool to move notes between folders:
-  - It should accept a note filename and a target folder.
-  - Ensure the indexes are updated accordingly.
-  - Update the links in existing notes to point to the new location:
-    - Just seach existing notes for the old filename and replace it with the new
-      one.
-
 - Add tools to add and remove tags from notes:
   - `add_tags` tool to add new tags to a note:
     - Accepts note filename and a list of tags.
